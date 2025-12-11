@@ -1,6 +1,10 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("com.google.gms.google-services")
+//    id("kotlin-kapt") // Add this line for kapt to work
+//    id("com.google.dagger.hilt.android") // Add this line for Hilt
+
 }
 
 android {
@@ -44,7 +48,7 @@ android {
     }
     
     composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.4"  // Compatible with Kotlin 1.9.20
+        kotlinCompilerExtensionVersion = "1.5.13"  // Compatible with Kotlin 1.9.23
     }
     
     packaging {
@@ -60,6 +64,7 @@ dependencies {
     
     // Core Android
     implementation("androidx.core:core-ktx:1.12.0")
+    // Life Cycle
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     implementation("androidx.activity:activity-compose:1.8.2")
     
@@ -107,6 +112,19 @@ dependencies {
     // ====== DEBUG ======
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
+
+    // Room Database
+    implementation("androidx.room:room-runtime:2.6.0")
+    implementation("androidx.room:room-ktx:2.6.0")
+
+    // Hilt for Dependency Injection
+//    implementation("com.google.dagger:hilt-android:2.57.2")
+    //noinspection UseTomlInstead
+
+    // Lifecycle
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")
+//    implementation("org.jetbrains.kotlin:kotlin-stdlib:2.1.0")
 
 
 }

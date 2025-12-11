@@ -1,6 +1,7 @@
 package com.yourorg.fitxtrackdemo.ui.screens
 
 import android.os.Build
+import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -44,6 +45,7 @@ import androidx.compose.runtime.mutableStateOf
 import com.yourorg.fitxtrackdemo.manager.UserManager
 import com.yourorg.fitxtrackdemo.ui.theme.*
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.yourorg.fitxtrackdemo.manager.SimpleHealthManager
 import com.yourorg.fitxtrackdemo.ui.viewmodels.WorkoutPlanViewModel
 import java.time.DayOfWeek
 
@@ -104,7 +106,25 @@ fun HomeScreen(
                         streakText = "🔥 5 Weeks",
                         leagueText = "🏆 Elite",
                         onProfileClick = onProfileClick,
-                        onLoginClick = {} ,
+                        onLoginClick = {
+                            try {
+                            navController.navigate("auth") {
+                                // Clear back stack if needed
+                                popUpTo("home") {
+                                    saveState = true
+                                }
+                                // Prevent multiple instances
+                                launchSingleTop = true
+                                // Restore state when going back
+                                restoreState = true
+                            }
+                            Log.d("HomeScreen", "Navigating to auth screen")
+                        } catch (e: Exception) {
+                            Log.e("HomeScreen", "Navigation failed: ${e.message}", e)
+                        }
+                                       },
+
+
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -280,7 +300,7 @@ fun HomeScreen(
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(40.dp)
+                                    .size(56.dp)
                                     .clip(CircleShape)
                                     .background(
                                         androidx.compose.ui.graphics.Brush.verticalGradient(
@@ -666,7 +686,7 @@ private fun TopRow(
     streakText: String,
     leagueText: String,
     onProfileClick: () -> Unit,
-    onLoginClick: () -> Unit
+    onLoginClick: () -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -723,7 +743,14 @@ private fun TopRow(
             }
         } else {
             Button(
-                onClick = { navController.navigate("auth") },
+                onClick = {
+                    Log.d("TopRow", "Login button clicked, isLoggedIn: $isLoggedIn")
+                    try {
+                        onLoginClick()
+                    } catch (e: Exception) {
+                        Log.e("TopRow", "Login button error: ${e.message}", e)
+                    }
+                },
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.height(36.dp),
                 colors = ButtonDefaults.buttonColors(
@@ -981,6 +1008,10 @@ fun StepsCard(
     kcal: String = "123.4 kcal",
     weekBars: List<Int> = listOf(30, 55, 70, 60, 80, 50, 65)
 ) {
+    // Get context for HealthManager
+    val context = LocalContext.current
+    val healthManager = remember { SimpleHealthManager(context) }
+
     Card(
         modifier = modifier,
         shape = RoundedCornerShape(20.dp),
@@ -1014,7 +1045,8 @@ fun StepsCard(
                     }
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "$stepsCount steps",
+                        // Use live steps count
+                        text = "${healthManager.currentSteps} steps",
                         style = MaterialTheme.typography.titleSmall.copy(
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp,
@@ -1023,7 +1055,8 @@ fun StepsCard(
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = "$distanceKm | $kcal",
+                        // Use live distance and calories
+                        text = "${String.format("%.2f", healthManager.currentDistance)} km | ${healthManager.currentCalories} kcal",
                         style = MaterialTheme.typography.bodySmall.copy(
                             fontSize = 11.sp,
                             color = lightBlue
@@ -1073,10 +1106,13 @@ fun StepsCard(
 @Composable
 fun CaloriesCard(
     modifier: Modifier = Modifier,
-    calories: Int = 120,
+    calories: Int = 120, // Default value, will be overridden
     goalText: String = "Hit 600 calories"
 ) {
-    val progress = calories / 600f
+    // Get context for HealthManager
+    val context = LocalContext.current
+    val healthManager = remember { SimpleHealthManager(context) }
+    val progress = healthManager.currentCalories / 600f
 
     Card(
         modifier = modifier,
@@ -1121,7 +1157,8 @@ fun CaloriesCard(
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        text = "$calories",
+                        // Use live calories count
+                        text = "${healthManager.currentCalories}",
                         style = MaterialTheme.typography.titleLarge.copy(
                             fontWeight = FontWeight.Bold,
                             fontSize = 22.sp,
