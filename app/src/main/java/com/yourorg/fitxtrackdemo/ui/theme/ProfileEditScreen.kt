@@ -18,26 +18,54 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import com.yourorg.fitxtrackdemo.ui.viewmodels.ProfileViewModel
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.Icon
-@OptIn(ExperimentalMaterial3Api::class)
+import kotlinx.coroutines.delay
+import androidx.compose.ui.draw.alpha
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileEditScreen(navController: NavController) {
-    // User profile state
-    var userName by remember { mutableStateOf("Dev") }
-    var age by remember { mutableStateOf("") }
-    var selectedGender by remember { mutableStateOf("") }
-    var height by remember { mutableStateOf("") }
-    var weight by remember { mutableStateOf("") }
-    var fitnessGoal by remember { mutableStateOf("") }
-    var experienceLevel by remember { mutableStateOf("") }
+    // Get your existing ViewModel
+    val viewModel: ProfileViewModel = viewModel()
 
-    val scrollState = rememberScrollState()
+    // Collect states from ViewModel
+    val uiState by viewModel.uiState.collectAsState()
+    val saveStatus by viewModel.saveStatus.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+
+    // Local snackbar state
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // Show snackbar for save status
+    LaunchedEffect(saveStatus) {
+        when (saveStatus) {
+            ProfileViewModel.SaveStatus.Success -> {
+                snackbarHostState.showSnackbar(
+                    message = "Profile saved successfully!",
+                    duration = SnackbarDuration.Short
+                )
+                // Wait a bit then navigate back
+                delay(1500)
+                navController.popBackStack()
+            }
+            is ProfileViewModel.SaveStatus.Error -> {
+                val errorMessage = (saveStatus as ProfileViewModel.SaveStatus.Error).message
+                snackbarHostState.showSnackbar(
+                    message = "Error: $errorMessage",
+                    duration = SnackbarDuration.Long
+                )
+            }
+            else -> {}
+        }
+    }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
@@ -53,13 +81,22 @@ fun ProfileEditScreen(navController: NavController) {
                     }
                 },
                 actions = {
-                    IconButton(
-                        onClick = {
-                            // Save profile logic here
-                            navController.popBackStack()
+                    when (saveStatus) {
+                        ProfileViewModel.SaveStatus.Saving -> {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp
+                            )
                         }
-                    ) {
-                        Icon(Icons.Default.Check, contentDescription = "Save")
+                        else -> {
+                            IconButton(
+                                onClick = {
+                                    viewModel.saveUserProfile()
+                                }
+                            ) {
+                                Icon(Icons.Default.Check, contentDescription = "Save")
+                            }
+                        }
                     }
                 }
             )
@@ -67,59 +104,88 @@ fun ProfileEditScreen(navController: NavController) {
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = {
-                    // Save profile and go back
-                    navController.popBackStack()
+                    viewModel.saveUserProfile()
                 },
                 containerColor = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(16.dp)
+                modifier = Modifier.padding(16.dp),
+//                enabled = saveStatus != ProfileViewModel.SaveStatus.Saving && !isLoading
             ) {
-                Icon(Icons.Default.Save, contentDescription = "Save Profile")
+                when (saveStatus) {
+                    ProfileViewModel.SaveStatus.Saving -> {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
+                    else -> {
+                        Icon(Icons.Default.Save, contentDescription = "Save Profile")
+                    }
+                }
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Save Profile")
             }
         },
         floatingActionButtonPosition = FabPosition.Center
     ) { paddingValues ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .verticalScroll(scrollState)
-                .padding(16.dp)
         ) {
-            // Profile Header
-            ProfileHeaderSection()
+            if (isLoading) {
+                // Show loading indicator on initial load
+                CircularProgressIndicator(
+                    modifier = Modifier
+                        .size(50.dp)
+                        .align(Alignment.Center)
+                )
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(16.dp)
+                ) {
+                    // Profile Header
+                    ProfileHeaderSection()
 
-            Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(24.dp))
 
-            // Personal Information Section
-            PersonalInfoSection(
-                userName = userName,
-                onNameChange = { userName = it },
-                age = age,
-                onAgeChange = { age = it },
-                selectedGender = selectedGender,
-                onGenderSelected = { selectedGender = it },
-                height = height,
-                onHeightChange = { height = it },
-                weight = weight,
-                onWeightChange = { weight = it }
-            )
+                    // Personal Information Section
+                    PersonalInfoSection(
+                        userName = uiState.name,
+                        onNameChange = { viewModel.updateField("name", it) },
+                        age = uiState.age,
+                        onAgeChange = { viewModel.updateField("age", it) },
+                        selectedGender = uiState.gender,
+                        onGenderSelected = { viewModel.updateField("gender", it) },
+                        height = uiState.height,
+                        onHeightChange = { viewModel.updateField("height", it) },
+                        weight = uiState.weight,
+                        onWeightChange = { viewModel.updateField("weight", it) }
+                    )
 
-            Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(24.dp))
 
-            // Fitness Information Section
-            FitnessInfoSection(
-                fitnessGoal = fitnessGoal,
-                onFitnessGoalSelected = { fitnessGoal = it },
-                experienceLevel = experienceLevel,
-                onExperienceLevelSelected = { experienceLevel = it }
-            )
+                    // Fitness Information Section
+                    FitnessInfoSection(
+                        fitnessGoal = uiState.fitnessGoal,
+                        onFitnessGoalSelected = { viewModel.updateField("fitnessGoal", it) },
+                        experienceLevel = uiState.experienceLevel,
+                        onExperienceLevelSelected = { viewModel.updateField("experienceLevel", it) }
+                    )
 
-            Spacer(modifier = Modifier.height(40.dp))
+                    Spacer(modifier = Modifier.height(40.dp))
+                }
+            }
         }
     }
 }
+
+// REST OF YOUR COMPOSABLE FUNCTIONS REMAIN EXACTLY THE SAME
+// ProfileHeaderSection, PersonalInfoSection, GenderDropdown, etc.
+// [PASTE ALL YOUR EXISTING COMPOSABLE FUNCTIONS HERE WITHOUT CHANGES]
 
 @Composable
 fun ProfileHeaderSection() {
@@ -280,8 +346,6 @@ fun PersonalInfoSection(
         }
     }
 }
-
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

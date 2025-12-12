@@ -42,9 +42,11 @@ import androidx.navigation.NavController
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.text.style.TextOverflow
 import com.yourorg.fitxtrackdemo.manager.UserManager
 import com.yourorg.fitxtrackdemo.ui.theme.*
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.google.firebase.auth.FirebaseAuth
 import com.yourorg.fitxtrackdemo.manager.SimpleHealthManager
 import com.yourorg.fitxtrackdemo.ui.viewmodels.WorkoutPlanViewModel
 import java.time.DayOfWeek
@@ -69,8 +71,36 @@ fun HomeScreen(
     onCalendarClick: () -> Unit,
     onProgressClick: () -> Unit
 ) {
-    val isLoggedIn by remember { mutableStateOf(UserManager.isUserLoggedIn()) }
-    val userName by remember { mutableStateOf(UserManager.getUserName()) }
+    // ============ ADD DEBUG CODE HERE ============
+    val context = LocalContext.current
+    val healthManager = remember { SimpleHealthManager(context) }
+
+    // Debug: Check sensor availability
+    LaunchedEffect(Unit) {
+        Log.d("STEP_TRACKING", "Step sensor available: ${healthManager.isStepSensorAvailable()}")
+        Log.d("STEP_TRACKING", "Current steps: ${healthManager.currentSteps}")
+        Log.d("STEP_TRACKING", "Current calories: ${healthManager.currentCalories}")
+        Log.d("STEP_TRACKING", "Current distance: ${healthManager.currentDistance}")
+    }
+    // ============ END DEBUG CODE ============
+
+    val auth = FirebaseAuth.getInstance()
+    // Use LaunchedEffect to listen for auth state changes
+    var currentUser by remember { mutableStateOf(auth.currentUser) }
+
+    LaunchedEffect(Unit) {
+        val listener = FirebaseAuth.AuthStateListener { firebaseAuth ->
+            currentUser = firebaseAuth.currentUser
+        }
+        auth.addAuthStateListener(listener)
+
+        // Don't forget to remove listener in onDispose if using LaunchedEffect
+    }
+
+    val isLoggedIn = currentUser != null
+    val userName = currentUser?.displayName ?:
+    currentUser?.email?.split("@")?.first() ?:
+    "User"
     val workoutPlanViewModel: WorkoutPlanViewModel = viewModel()
     val todayWorkout by workoutPlanViewModel.todayWorkout.collectAsState()
     val weeklyPlans by workoutPlanViewModel.weeklyPlans.collectAsState()
@@ -696,7 +726,9 @@ private fun TopRow(
         Row(verticalAlignment = Alignment.CenterVertically) {
             ProfileImage(profileImageUrl = profileImageUrl, onClick = onProfileClick)
             Spacer(modifier = Modifier.width(12.dp))
-            Column {
+
+            Column  {
+
                 if (isLoggedIn && userName.isNotBlank()) {
                     Text(
                         text = "Hi, $userName",
@@ -705,6 +737,7 @@ private fun TopRow(
                             fontWeight = FontWeight.Bold,
                             color = Color.White
                         )
+
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
@@ -713,6 +746,7 @@ private fun TopRow(
                             fontSize = 14.sp,
                             color = lightBlue
                         )
+
                     )
                 } else {
                     Text(
@@ -722,6 +756,7 @@ private fun TopRow(
                             fontWeight = FontWeight.Bold,
                             color = Color.White
                         )
+
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
@@ -730,13 +765,17 @@ private fun TopRow(
                             fontSize = 14.sp,
                             color = lightBlue
                         )
+
                     )
                 }
             }
         }
 
         if (isLoggedIn) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.wrapContentWidth()  //
+                        ) {
+
                 Chip(text = leagueText, color = lightBlue)
                 Spacer(modifier = Modifier.width(6.dp))
                 Chip(text = streakText, color = mediumBlue)
@@ -752,7 +791,9 @@ private fun TopRow(
                     }
                 },
                 shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.height(36.dp),
+                modifier = Modifier.height(36.dp)
+                    .wrapContentWidth(), // add this
+
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color.White,
                     contentColor = deepBlue

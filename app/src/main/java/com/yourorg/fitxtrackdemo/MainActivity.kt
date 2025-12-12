@@ -1,6 +1,7 @@
 // MainActivity.kt - UPDATED VERSION
 package com.yourorg.fitxtrackdemo
 
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
@@ -67,6 +68,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.Button
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import com.google.firebase.FirebaseApp
 
 // NEW COLOR THEME - Clean gym aesthetic
 val gymDarkBlue = Color(0xFF0A0E17)
@@ -82,18 +86,41 @@ class MainActivity : ComponentActivity() {
     private val fitnessViewModel: FitnessViewModel by   viewModels()
     private lateinit var healthManager: SimpleHealthManager  // ADD THIS LINE
 
+    // Permission request code
+    private val PERMISSION_REQUEST_CODE = 100
+
     @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         // Initialize Health Manager - ADD THIS
         healthManager = SimpleHealthManager(this)
+        // Firebase is automatically initialized if you have google-services.json
+        // This is just to ensure Firebase is initialized
+        FirebaseApp.initializeApp(this)
+
+        // Request permissions
+        requestPermissions()
 
         setContent {
             FitXTrackDemoTheme {
                 Surface(color = MaterialTheme.colorScheme.background) {
                     AppNavHost(activity = this, fitnessViewModel = fitnessViewModel)
                 }
+            }
+        }
+    }
+    private fun requestPermissions() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val permissions = arrayOf(
+                android.Manifest.permission.ACTIVITY_RECOGNITION
+            )
+
+            // Check if we need to request
+            if (permissions.any {
+                    ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+                }) {
+                ActivityCompat.requestPermissions(this, permissions, PERMISSION_REQUEST_CODE)
             }
         }
     }

@@ -39,6 +39,12 @@ class SimpleHealthManager(context: Context) : SensorEventListener {
         loadSavedSteps()
     }
 
+    // Add this function to SimpleHealthManager.kt
+    fun isStepSensorAvailable(): Boolean {
+        return stepSensor != null
+    }
+
+    
     private fun setupStepCounter() {
         stepSensor = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
         stepSensor?.let {
