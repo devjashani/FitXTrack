@@ -358,36 +358,41 @@ fun GenderDropdown(
     val genders = listOf("Male", "Female", "Other", "Prefer not to say")
 
     Box(modifier = modifier) {
-        OutlinedTextField(
-            value = selectedGender,
-            onValueChange = {},
-            label = { Text("Gender") },
-            leadingIcon = {
-                Icon(Icons.Default.Face, contentDescription = "Gender")
-            },
-            trailingIcon = {
-                Icon(Icons.Default.ArrowDropDown, contentDescription = "Expand")
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { expanded = true },
-            readOnly = true,
-            singleLine = true
-        )
-
-        DropdownMenu(
+        // Use ExposedDropdownMenuBox instead
+        ExposedDropdownMenuBox(
             expanded = expanded,
-            onDismissRequest = { expanded = false },
-            modifier = Modifier.fillMaxWidth()
+            onExpandedChange = { expanded = !expanded }
         ) {
-            genders.forEach { gender ->
-                DropdownMenuItem(
-                    text = { Text(gender) },
-                    onClick = {
-                        onGenderSelected(gender)
-                        expanded = false
-                    }
-                )
+            OutlinedTextField(
+                value = selectedGender,
+                onValueChange = {},
+                label = { Text("Gender") },
+                leadingIcon = {
+                    Icon(Icons.Default.Face, contentDescription = "Gender")
+                },
+                trailingIcon = {
+                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .menuAnchor(),
+                readOnly = true,
+                singleLine = true
+            )
+
+            ExposedDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false }
+            ) {
+                genders.forEach { gender ->
+                    DropdownMenuItem(
+                        text = { Text(gender) },
+                        onClick = {
+                            onGenderSelected(gender)
+                            expanded = false
+                        }
+                    )
+                }
             }
         }
     }
@@ -441,36 +446,40 @@ fun FitnessGoalDropdown(
     )
 
     Box(modifier = modifier) {
-        OutlinedTextField(
-            value = selectedGoal,
-            onValueChange = {},
-            label = { Text("Fitness Goal") },
-            leadingIcon = {
-                Icon(Icons.Default.Star, contentDescription = "Fitness Goal")
-            },
-            trailingIcon = {
-                Icon(Icons.Default.ArrowDropDown, contentDescription = "Expand")
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { expanded = true },
-            readOnly = true,
-            singleLine = true
-        )
-
-        DropdownMenu(
+        ExposedDropdownMenuBox(
             expanded = expanded,
-            onDismissRequest = { expanded = false },
-            modifier = Modifier.fillMaxWidth()
+            onExpandedChange = { expanded = !expanded }
         ) {
-            fitnessGoals.forEach { goal ->
-                DropdownMenuItem(
-                    text = { Text(goal) },
-                    onClick = {
-                        onGoalSelected(goal)
-                        expanded = false
-                    }
-                )
+            OutlinedTextField(
+                value = selectedGoal,
+                onValueChange = {},
+                label = { Text("Fitness Goal") },
+                leadingIcon = {
+                    Icon(Icons.Default.Star, contentDescription = "Fitness Goal")
+                },
+                trailingIcon = {
+                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .menuAnchor(),
+                readOnly = true,
+                singleLine = true
+            )
+
+            ExposedDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false }
+            ) {
+                fitnessGoals.forEach { goal ->
+                    DropdownMenuItem(
+                        text = { Text(goal) },
+                        onClick = {
+                            onGoalSelected(goal)
+                            expanded = false
+                        }
+                    )
+                }
             }
         }
     }
@@ -492,36 +501,40 @@ fun ExperienceLevelDropdown(
     )
 
     Box(modifier = modifier) {
-        OutlinedTextField(
-            value = selectedLevel,
-            onValueChange = {},
-            label = { Text("Experience Level") },
-            leadingIcon = {
-                Icon(Icons.Default.TrendingUp, contentDescription = "Experience Level")
-            },
-            trailingIcon = {
-                Icon(Icons.Default.ArrowDropDown, contentDescription = "Expand")
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { expanded = true },
-            readOnly = true,
-            singleLine = true
-        )
-
-        DropdownMenu(
+        ExposedDropdownMenuBox(
             expanded = expanded,
-            onDismissRequest = { expanded = false },
-            modifier = Modifier.fillMaxWidth()
+            onExpandedChange = { expanded = !expanded }
         ) {
-            experienceLevels.forEach { level ->
-                DropdownMenuItem(
-                    text = { Text(level) },
-                    onClick = {
-                        onLevelSelected(level)
-                        expanded = false
-                    }
-                )
+            OutlinedTextField(
+                value = selectedLevel,
+                onValueChange = {},
+                label = { Text("Experience Level") },
+                leadingIcon = {
+                    Icon(Icons.Default.TrendingUp, contentDescription = "Experience Level")
+                },
+                trailingIcon = {
+                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .menuAnchor(),
+                readOnly = true,
+                singleLine = true
+            )
+
+            ExposedDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false }
+            ) {
+                experienceLevels.forEach { level ->
+                    DropdownMenuItem(
+                        text = { Text(level) },
+                        onClick = {
+                            onLevelSelected(level)
+                            expanded = false
+                        }
+                    )
+                }
             }
         }
     }

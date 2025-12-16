@@ -136,6 +136,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun AppNavHost(activity: ComponentActivity, fitnessViewModel: FitnessViewModel) {
     val navController = rememberNavController()
+    val workoutViewModel: WorkoutViewModel = viewModel()  // Create ONCE here
 
     NavHost(navController = navController, startDestination = "start") {
 
@@ -193,6 +194,35 @@ fun AppNavHost(activity: ComponentActivity, fitnessViewModel: FitnessViewModel) 
             )
         }
 
+// Add this route in your NavHost:
+        composable(
+            "customWorkout/{workoutName}/{exercises}",
+            arguments = listOf(
+                navArgument("workoutName") { type = NavType.StringType },
+                navArgument("exercises") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val workoutName = backStackEntry.arguments?.getString("workoutName") ?: ""
+            val exercisesString = backStackEntry.arguments?.getString("exercises") ?: ""
+            GenericWorkoutScreen(
+                navController = navController,
+                workoutName = workoutName,
+                exercisesString = exercisesString
+            )
+        }
+        // Add these routes
+        composable("booking") {
+            BookingScreen(navController = navController)
+        }
+
+        composable("pricing") {
+            PricingScreen(navController = navController)
+        }
+        // In your NavHost composable where you define routes
+        composable("personalTraining") {
+            PersonalTrainingScreen(navController = navController)
+        }
+
         composable("settings") {
             SettingScreen(navController = navController)
         }
@@ -246,12 +276,12 @@ fun AppNavHost(activity: ComponentActivity, fitnessViewModel: FitnessViewModel) 
         }
 
         composable("workoutMain") {
-            val workoutViewModel: WorkoutViewModel = viewModel()
+//            val workoutViewModel: WorkoutViewModel = viewModel()
             WorkoutMainScreen(navController = navController, workoutViewModel = workoutViewModel)
         }
 
         composable("createCustomPlan") {
-            val workoutViewModel: WorkoutViewModel = viewModel()
+//            val workoutViewModel: WorkoutViewModel = viewModel()
             CreateCustomPlanScreen(navController = navController, workoutViewModel = workoutViewModel)
         }
 

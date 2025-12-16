@@ -16,12 +16,20 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.yourorg.fitxtrackdemo.ui.theme.WorkoutViewModel
+import androidx.compose.material3.DismissDirection
+import androidx.compose.material3.DismissValue
+import androidx.compose.material3.SwipeToDismiss
+import androidx.compose.material3.rememberDismissState
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -67,7 +75,8 @@ fun WorkoutMainScreen(
                 }
             )
         },
-        floatingActionButton = {
+        // Commented out the Quick Start floating action button
+        /* floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = {
                     navController.navigate("workout") // Navigate to exercise selection
@@ -80,7 +89,7 @@ fun WorkoutMainScreen(
                 Text("Quick Start")
             }
         },
-        floatingActionButtonPosition = FabPosition.Center
+        floatingActionButtonPosition = FabPosition.Center */
     ) { paddingValues ->
         Column(
             modifier = Modifier
@@ -121,7 +130,7 @@ fun WorkoutMainScreen(
                     .weight(1f)
             ) { page ->
                 when (page) {
-                    0 -> MyWorkoutPlans(navController, customPlans)
+                    0 -> MyWorkoutPlans(navController, workoutViewModel, customPlans)
                     1 -> BrowseWorkouts(navController)
                     2 -> WorkoutHistory(navController)
                 }
@@ -180,7 +189,11 @@ fun SummaryItem(title: String, value: String, unit: String) {
 }
 
 @Composable
-fun MyWorkoutPlans(navController: NavController, customPlans: List<com.yourorg.fitxtrackdemo.data.CustomWorkoutPlan>) {
+fun MyWorkoutPlans(
+    navController: NavController,
+    workoutViewModel: WorkoutViewModel,
+    customPlans: List<com.yourorg.fitxtrackdemo.data.CustomWorkoutPlan>
+) {
     val defaultWorkoutPlans = listOf(
         WorkoutPlan("Push Day - Prime", "Chest & Triceps", "45 min", Icons.Default.FitnessCenter, Color(0xFFFF6B6B)),
         WorkoutPlan("Push Day Elite", "Chest, Shoulder & Triceps", "50 min", Icons.Default.FitnessCenter, Color(0xFFFF8E6B)),
@@ -191,6 +204,10 @@ fun MyWorkoutPlans(navController: NavController, customPlans: List<com.yourorg.f
         WorkoutPlan("Abs & Core", "Core Strengthening", "30 min", Icons.Default.SelfImprovement, Color(0xFF96CEB4)),
         WorkoutPlan("Full Body", "All Muscle Groups", "55 min", Icons.Default.Sports, Color(0xFF4CAF50))
     )
+
+    // State for delete confirmation
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    var planToDelete by remember { mutableStateOf<com.yourorg.fitxtrackdemo.data.CustomWorkoutPlan?>(null) }
 
     // Debug logging to see what's being rendered
     LaunchedEffect(customPlans) {
@@ -237,9 +254,10 @@ fun MyWorkoutPlans(navController: NavController, customPlans: List<com.yourorg.f
                 println("DEBUG: Rendering custom plan card: ${customPlan.name}")
                 CustomWorkoutPlanCard(
                     plan = customPlan,
-                    onClick = {
-                        // Navigate to workout screen with custom exercises
-                        navController.navigate("workoutDay/${customPlan.name}?exercises=${customPlan.exercises.joinToString(",")}")
+                    navController = navController,
+                    onDelete = {
+                        planToDelete = customPlan
+                        showDeleteDialog = true
                     }
                 )
             }
@@ -316,73 +334,168 @@ fun MyWorkoutPlans(navController: NavController, customPlans: List<com.yourorg.f
             }
         }
     }
+
+    // Delete Confirmation Dialog
+    if (showDeleteDialog && planToDelete != null) {
+        AlertDialog(
+            onDismissRequest = {
+                showDeleteDialog = false
+                planToDelete = null
+            },
+            title = {
+                Text("Delete Workout Plan")
+            },
+            text = {
+                Text("Are you sure you want to delete \"${planToDelete?.name}\"? This action cannot be undone.")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        workoutViewModel.deleteCustomPlan(planToDelete?.id ?: "")
+                        showDeleteDialog = false
+                        planToDelete = null
+                    }
+                ) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteDialog = false
+                        planToDelete = null
+                    }
+                ) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CustomWorkoutPlanCard(
     plan: com.yourorg.fitxtrackdemo.data.CustomWorkoutPlan,
-    onClick: () -> Unit
+    navController: NavController,
+    onDelete: () -> Unit
 ) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() },
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(50.dp)
-                    .background(Color(0xFF9C27B0).copy(alpha = 0.2f), RoundedCornerShape(12.dp)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Create,
-                    contentDescription = plan.name,
-                    tint = Color(0xFF9C27B0),
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-            Spacer(modifier = Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = plan.name,
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                )
-                Text(
-                    text = plan.description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                )
-                Text(
-                    text = "${plan.exercises.size} exercises",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    text = plan.duration,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
-                )
-                Text(
-                    text = "Start",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold
-                    )
-                )
+    val haptic = LocalHapticFeedback.current
+    val dismissState = rememberDismissState(
+        confirmValueChange = { value ->
+            if (value == DismissValue.DismissedToStart) {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                onDelete()
+                true
+            } else {
+                false
             }
         }
-    }
+    )
+
+    SwipeToDismiss(
+        state = dismissState,
+        directions = setOf(DismissDirection.EndToStart),
+        background = {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        MaterialTheme.colorScheme.error,
+                        RoundedCornerShape(16.dp)
+                    )
+                    .padding(horizontal = 24.dp),
+                contentAlignment = Alignment.CenterEnd
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = "Delete",
+                        tint = Color.White
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Delete",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        },
+        dismissContent = {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        navController.navigate(
+                            "customWorkout/${plan.name}/${plan.exercises.joinToString(",")}"
+                        )
+                    },
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(50.dp)
+                            .background(
+                                Color(0xFF9C27B0).copy(alpha = 0.2f),
+                                RoundedCornerShape(12.dp)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Create,
+                            contentDescription = plan.name,
+                            tint = Color(0xFF9C27B0),
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(16.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = plan.name,
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                        )
+                        Text(
+                            text = plan.description,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                        Text(
+                            text = "${plan.exercises.size} exercises",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = plan.duration,
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
+                        )
+                        Text(
+                            text = "Start",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold
+                            )
+                        )
+                    }
+                }
+            }
+        }
+    )
 }
+
 
 @Composable
 fun BrowseWorkouts(navController: NavController) {

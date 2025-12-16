@@ -71,9 +71,11 @@ fun CreateCustomPlanScreen( navController: NavController,
                             if (planName.text.isNotBlank() && selectedExercises.isNotEmpty()) {
                                 // Save the custom plan to ViewModel
                                 val customPlan = CustomWorkoutPlan(
+                                    //id = System.currentTimeMillis().toString(),
                                     name = planName.text,
                                     description = planDescription.text.ifBlank { "Custom workout plan" },
                                     exercises = selectedExercises.toList()
+                                    //duration = "${selectedExercises.size * 10} min" // Calculate duration based on exercises
                                 )
                                 workoutViewModel.addCustomPlan(customPlan)
                                 navController.popBackStack()
@@ -253,9 +255,12 @@ fun CreateCustomPlanScreen( navController: NavController,
                     onClick = {
                         if (planName.text.isNotBlank() && selectedExercises.isNotEmpty()) {
                             val customPlan = CustomWorkoutPlan(
+                                //id = System.currentTimeMillis().toString(),
                                 name = planName.text,
                                 description = planDescription.text.ifBlank { "Custom workout plan" },
                                 exercises = selectedExercises.toList()
+                                //duration = "${selectedExercises.size * 10} min" // Calculate duration based on exercises
+
                             )
                             workoutViewModel.addCustomPlan(customPlan)
                             navController.popBackStack()

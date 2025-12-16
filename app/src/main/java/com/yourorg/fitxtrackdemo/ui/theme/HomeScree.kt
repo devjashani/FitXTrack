@@ -47,8 +47,10 @@ import com.yourorg.fitxtrackdemo.manager.UserManager
 import com.yourorg.fitxtrackdemo.ui.theme.*
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.firebase.auth.FirebaseAuth
+import com.yourorg.fitxtrackdemo.manager.HealthManagerHolder
 import com.yourorg.fitxtrackdemo.manager.SimpleHealthManager
 import com.yourorg.fitxtrackdemo.ui.viewmodels.WorkoutPlanViewModel
+import kotlinx.coroutines.delay
 import java.time.DayOfWeek
 
 // Using theme colors from Theme.kt
@@ -73,8 +75,28 @@ fun HomeScreen(
 ) {
     // ============ ADD DEBUG CODE HERE ============
     val context = LocalContext.current
-    val healthManager = remember { SimpleHealthManager(context) }
+    val healthManager = remember {
+        HealthManagerHolder.getInstance(context)
+    }
 
+    // State to trigger recomposition when steps change
+    val steps by remember { mutableStateOf(healthManager.currentSteps) }
+    val calories by remember { mutableStateOf(healthManager.currentCalories) }
+    val distance by remember { mutableStateOf(healthManager.currentDistance) }
+
+    // Auto-update UI every 2 seconds
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(2000)
+            // This will trigger recomposition with updated values
+            with(healthManager) {
+                // Accessing these values updates the mutable states
+                healthManager.currentSteps
+                healthManager.currentCalories
+                healthManager.currentDistance
+            }
+        }
+    }
     // Debug: Check sensor availability
     LaunchedEffect(Unit) {
         Log.d("STEP_TRACKING", "Step sensor available: ${healthManager.isStepSensorAvailable()}")
@@ -215,6 +237,107 @@ fun HomeScreen(
                 }
                 // ================ END NEW ================
 
+                // ================= Personal Training System =================
+                @Composable
+                fun PersonalTrainingCard(
+                    modifier: Modifier = Modifier,
+                    onClick: () -> Unit = {}
+                ) {
+                    Card(
+                        modifier = modifier
+                            .fillMaxWidth()
+                            .height(160.dp)  // Adjust height as needed
+                            .clickable(onClick = onClick),
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
+                    ) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            // Header with gradient
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(100.dp)
+                                    .background(
+                                        brush = androidx.compose.ui.graphics.Brush.linearGradient(
+                                            colors = listOf(deepBlue, mediumBlue)
+                                        )
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column {
+                                        Text(
+                                            text = "PERSONAL TRAINING",
+                                            style = MaterialTheme.typography.titleLarge.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.White
+                                            ),
+                                            fontSize = 18.sp
+                                        )
+                                        Text(
+                                            text = "1-on-1 Coaching with Dev",
+                                            style = MaterialTheme.typography.bodyMedium.copy(
+                                                color = lightBlue
+                                            )
+                                        )
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .size(50.dp)
+                                            .clip(CircleShape)
+                                            .background(Color.White)
+                                            .padding(8.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            Icons.Default.FitnessCenter,
+                                            contentDescription = "Training",
+                                            tint = deepBlue,
+                                            modifier = Modifier.size(28.dp)
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Content
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Custom Plans + Nutrition + Accountability",
+                                        style = MaterialTheme.typography.bodyMedium.copy(
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = deepBlue
+                                        ),
+                                        maxLines = 2
+                                    )
+                                }
+                                Button(
+                                    onClick = onClick,
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = deepBlue,
+                                        contentColor = Color.White
+                                    ),
+                                    modifier = Modifier.height(36.dp)
+                                ) {
+                                    Text("Learn More", fontSize = 12.sp)
+                                }
+                            }
+                        }
+                    }
+                }
                 Spacer(modifier = Modifier.height(20.dp))
 
                 // Today's Progress Section
@@ -234,8 +357,14 @@ fun HomeScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    StepsCard(modifier = Modifier.weight(1f))
-                    CaloriesCard(modifier = Modifier.weight(1f))
+                    StepsCard(
+                        modifier = Modifier.weight(1f),
+                        healthManager = healthManager  // ✅ Pass the singleton
+                    )
+                    CaloriesCard(
+                                modifier = Modifier.weight(1f),
+                        healthManager = healthManager  // ✅ Pass the singleton
+                 )
                 }
 
                 Spacer(modifier = Modifier.height(20.dp))
@@ -501,6 +630,30 @@ fun HomeScreen(
                         )
                     }
                 }
+
+                // ================ ADD PERSONAL TRAINING CARD HERE ================
+                Spacer(modifier = Modifier.height(20.dp))
+
+// Personal Training Section
+                Text(
+                    text = "Personal Training",
+                    style = MaterialTheme.typography.labelLarge.copy(
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 0.5.sp
+                    ),
+                    color = deepBlue.copy(alpha = 0.8f),
+                    modifier = Modifier.padding(horizontal = 4.dp)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                PersonalTrainingCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = {
+                        navController.navigate("personalTraining")
+                    }
+                )
+// ================ END PERSONAL TRAINING CARD ================
 
                 // Add extra space at the bottom for the navigation pill
                 Spacer(modifier = Modifier.height(80.dp))
@@ -1047,6 +1200,7 @@ fun StepsCard(
     stepsCount: Int = 3246,
     distanceKm: String = "2.51 km",
     kcal: String = "123.4 kcal",
+    healthManager: SimpleHealthManager,  // Add this parameter
     weekBars: List<Int> = listOf(30, 55, 70, 60, 80, 50, 65)
 ) {
     // Get context for HealthManager
@@ -1148,6 +1302,7 @@ fun StepsCard(
 fun CaloriesCard(
     modifier: Modifier = Modifier,
     calories: Int = 120, // Default value, will be overridden
+    healthManager: SimpleHealthManager,  // Add this parameter
     goalText: String = "Hit 600 calories"
 ) {
     // Get context for HealthManager
