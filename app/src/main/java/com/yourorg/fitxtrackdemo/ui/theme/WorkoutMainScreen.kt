@@ -192,6 +192,7 @@ fun SummaryItem(title: String, value: String, unit: String) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MyWorkoutPlans(
     navController: NavController,
@@ -255,7 +256,8 @@ fun MyWorkoutPlans(
                 )
             }
 
-            items(customPlans) { customPlan ->
+            items(items = customPlans,
+                key = { plan -> plan.id } ) { customPlan ->
                 println("DEBUG: Rendering custom plan card: ${customPlan.name}")
                 CustomWorkoutPlanCard(
                     plan = customPlan,
@@ -264,6 +266,7 @@ fun MyWorkoutPlans(
                         planToDelete = customPlan
                         showDeleteDialog = true
                     }
+                            ,modifier = Modifier.animateItemPlacement()  // Smooth animations
                 )
             }
         } else {
@@ -384,7 +387,8 @@ fun MyWorkoutPlans(
 fun CustomWorkoutPlanCard(
     plan: com.yourorg.fitxtrackdemo.data.CustomWorkoutPlan,
     navController: NavController,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier  // Add modifier parameter
 ) {
     val haptic = LocalHapticFeedback.current
     val dismissState = rememberDismissState(
@@ -399,9 +403,14 @@ fun CustomWorkoutPlanCard(
         }
     )
 
+    // Reset dismiss state when plan changes
+    LaunchedEffect(plan.id) {
+        dismissState.reset()
+    }
     SwipeToDismiss(
         state = dismissState,
         directions = setOf(DismissDirection.EndToStart),
+        modifier = modifier,  // Use the modifier
         background = {
             Box(
                 modifier = Modifier
