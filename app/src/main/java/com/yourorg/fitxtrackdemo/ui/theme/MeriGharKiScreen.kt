@@ -2,6 +2,7 @@
 package com.yourorg.fitxtrackdemo.ui.screens
 
 import android.os.Build
+import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -13,8 +14,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -28,6 +28,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.yourorg.fitxtrackdemo.R
 import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.*
 import androidx.compose.material3.Card
@@ -36,12 +37,29 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.collectAsState
 import androidx.navigation.NavController
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.text.style.TextOverflow
 import com.yourorg.fitxtrackdemo.manager.UserManager
+import com.yourorg.fitxtrackdemo.ui.theme.*
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.google.firebase.auth.FirebaseAuth
+import com.yourorg.fitxtrackdemo.manager.HealthManagerHolder
+import com.yourorg.fitxtrackdemo.manager.SimpleHealthManager
+import com.yourorg.fitxtrackdemo.ui.viewmodels.WorkoutPlanViewModel
+import kotlinx.coroutines.delay
+import java.time.DayOfWeek
+import androidx.compose.animation.core.*
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.zIndex
 
+// Using theme colors from Theme.kt
+val deepNavy = FitnessDarkBlue      // #0A1931
+val lightBlue = FitnessLightBlue    // #B3CFE5
+val mediumBlue = FitnessMediumBlue  // #4A7FA7
+val deepBlue = FitnessDeepBlue      // #1A3D63
+val offWhite = FitnessOffWhite      // #F6FAFD
 
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
@@ -49,39 +67,184 @@ fun HomeScreen(
     navController: NavController,
     profileImageUrl: String? = null,
     modifier: Modifier = Modifier,
-    onProfileClick: () -> Unit = {},
+    onProfileClick: () -> Unit = {
+        // NAVIGATE TO SETTINGS
+//        navController.navigate("settings")
+    },
     onCalendarClick: () -> Unit,
     onProgressClick: () -> Unit
 ) {
-    val isLoggedIn by remember { mutableStateOf(UserManager.isUserLoggedIn()) }
-    val userName by remember { mutableStateOf(UserManager.getUserName()) }
+    // ============ ADD DEBUG CODE HERE ============
+    val context = LocalContext.current
+    val healthManager = remember {
+        HealthManagerHolder.getInstance(context)
+    }
 
-    Box(modifier = modifier.fillMaxSize()) {
+    // State to trigger recomposition when steps change
+    val steps by remember { mutableStateOf(healthManager.currentSteps) }
+    val calories by remember { mutableStateOf(healthManager.currentCalories) }
+    val distance by remember { mutableStateOf(healthManager.currentDistance) }
+
+    // STATE FOR SELECTED DATE
+    var selectedDate by remember { mutableStateOf(LocalDate.now()) }
+
+    // STATE FOR DISPLAYING SELECTED DATE DATA - FIXED VERSION
+    var selectedDateData by remember(selectedDate) {
+        mutableStateOf<Triple<Int, Int, Double>?>(null)
+    }
+
+    // Initialize selected date data
+    LaunchedEffect(selectedDate) {
+        selectedDateData = if (selectedDate == LocalDate.now()) {
+            Triple(steps, calories, distance)
+        } else {
+            healthManager.getStepsForDate(selectedDate)
+        }
+    }
+
+    // Update selected data when steps change (for today)
+    LaunchedEffect(steps, calories, distance) {
+        if (selectedDate == LocalDate.now()) {
+            selectedDateData = Triple(steps, calories, distance)
+        }
+    }
+
+    // Get display values safely
+    val displaySteps = selectedDateData?.first ?: steps
+    val displayCalories = selectedDateData?.second ?: calories
+    val displayDistance = selectedDateData?.third ?: distance
+
+    // Auto-update UI every 2 seconds
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(2000)
+            // This will trigger recomposition with updated values
+            with(healthManager) {
+                // Accessing these values updates the mutable states
+                healthManager.currentSteps
+                healthManager.currentCalories
+                healthManager.currentDistance
+
+                // Always save today's data when it updates
+                if (selectedDate == LocalDate.now()) {
+                    healthManager.saveStepsForDate(
+                        LocalDate.now().toString(),
+                        healthManager.currentSteps,
+                        healthManager.currentCalories,
+                        healthManager.currentDistance
+                    )
+                }
+            }
+        }
+    }
+
+    // Update selected date data when date changes
+    LaunchedEffect(selectedDate) {
+        if (selectedDate == LocalDate.now()) {
+            selectedDateData = Triple(steps, calories, distance)
+        } else {
+            // Get historical data for the selected date
+            selectedDateData = healthManager.getStepsForDate(selectedDate)
+        }
+    }
+    // Debug: Check sensor availability
+    LaunchedEffect(Unit) {
+        Log.d("STEP_TRACKING", "Step sensor available: ${healthManager.isStepSensorAvailable()}")
+        Log.d("STEP_TRACKING", "Current steps: ${healthManager.currentSteps}")
+        Log.d("STEP_TRACKING", "Current calories: ${healthManager.currentCalories}")
+        Log.d("STEP_TRACKING", "Current distance: ${healthManager.currentDistance}")
+
+        // Also save initial today's data
+        healthManager.saveStepsForDate(
+            LocalDate.now().toString(),
+            healthManager.currentSteps,
+            healthManager.currentCalories,
+            healthManager.currentDistance
+        )
+    }
+    // ============ END DEBUG CODE ============
+
+    val auth = FirebaseAuth.getInstance()
+    // Use LaunchedEffect to listen for auth state changes
+    var currentUser by remember { mutableStateOf(auth.currentUser) }
+
+    LaunchedEffect(Unit) {
+        val listener = FirebaseAuth.AuthStateListener { firebaseAuth ->
+            currentUser = firebaseAuth.currentUser
+        }
+        auth.addAuthStateListener(listener)
+
+        // Don't forget to remove listener in onDispose if using LaunchedEffect
+    }
+
+    val isLoggedIn = currentUser != null
+    val userName = currentUser?.displayName ?:
+    currentUser?.email?.split("@")?.first() ?:
+    "User"
+    val workoutPlanViewModel: WorkoutPlanViewModel = viewModel()
+    val todayWorkout by workoutPlanViewModel.todayWorkout.collectAsState()
+    val weeklyPlans by workoutPlanViewModel.weeklyPlans.collectAsState()
+
+    Box(modifier = modifier.fillMaxSize().background(offWhite)) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
         ) {
-            // Header Section
-            Column(
+            // Header Section with gradient background using new colors
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                    .background(
+                        brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                            colors = listOf(deepBlue, mediumBlue)
+                        )
+                    )
+                    .padding(bottom = 24.dp)
             ) {
-                TopRow(
-                    isLoggedIn = isLoggedIn,
-                    userName = userName,
-                    profileImageUrl = profileImageUrl,
-                    streakText = "🔥 5 Weeks",
-                    leagueText = "💀 Elite",
-                    onProfileClick = onProfileClick,
-                    onLoginClick = {
-                        navController.navigate("auth")
-                    }
-                )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                ) {
 
-                Spacer(modifier = Modifier.height(16.dp))
-                CalendarWeekUI()
+                    TopRow(
+                        navController = navController,  // ← ADD THIS LINE
+                        isLoggedIn = isLoggedIn,
+                        userName = userName,
+                        profileImageUrl = profileImageUrl,
+                        streakText = "🔥 5 Weeks",
+                        leagueText = "🏆 Elite",
+                        onProfileClick = onProfileClick,
+                        onLoginClick = {
+                            try {
+                                navController.navigate("auth") {
+                                    // Clear back stack if needed
+                                    popUpTo("home") {
+                                        saveState = true
+                                    }
+                                    // Prevent multiple instances
+                                    launchSingleTop = true
+                                    // Restore state when going back
+                                    restoreState = true
+                                }
+                                Log.d("HomeScreen", "Navigating to auth screen")
+                            } catch (e: Exception) {
+                                Log.e("HomeScreen", "Navigation failed: ${e.message}", e)
+                            }
+                        },
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                    // UPDATED CALENDAR - Now connected to selectedDate
+                    CalendarWeekUI(
+                        selectedDate = selectedDate,
+                        onDateSelected = { date ->
+                            selectedDate = date
+                            Log.d("HomeScreen", "Calendar date clicked: $date")
+                        }
+                    )
+                }
             }
 
             // Main Content
@@ -90,36 +253,176 @@ fun HomeScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
             ) {
+                Spacer(modifier = Modifier.height(12.dp))
+
                 // TODAY'S WORKOUT Section
                 Text(
-                    text = "TODAY'S WORKOUT",
+                    text = if (selectedDate == LocalDate.now()) "TODAY'S WORKOUT" else "WORKOUT FOR ${selectedDate.format(DateTimeFormatter.ofPattern("MMM dd"))}",
                     style = MaterialTheme.typography.labelLarge.copy(
                         fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 0.5.sp
                     ),
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                    color = deepBlue.copy(alpha = 0.8f),
+                    modifier = Modifier.padding(horizontal = 4.dp)
                 )
                 Spacer(modifier = Modifier.height(8.dp))
 
-                PushWorkoutCard(
-                    thumbnailRes = R.drawable.ic_workout_placeholder,
-                    modifier = Modifier.fillMaxWidth(),
-                    onStartClick = {
-                        // Navigate to WorkoutScreen - this is passed correctly now
-                        navController.navigate("workout")
-                    }
-                )
+                // ================ Show Today's Planned Workout or Add Workout Card ================
+                if (todayWorkout != null && selectedDate == LocalDate.now()) {
+                    PlannedWorkoutCard(
+                        workout = todayWorkout!!,
+                        modifier = Modifier.fillMaxWidth(),
+                        onStartClick = {
+                            // Navigate based on workout type
+                            when {
+                                todayWorkout!!.workoutName.contains("Push", ignoreCase = true) ->
+                                    navController.navigate("pushday")
+                                todayWorkout!!.workoutName.contains("Pull", ignoreCase = true) ->
+                                    navController.navigate("pullDay")
+                                todayWorkout!!.workoutName.contains("Leg", ignoreCase = true) ->
+                                    navController.navigate("legDay")
+                                todayWorkout!!.workoutName.contains("Full Body", ignoreCase = true) ->
+                                    navController.navigate("fullBody")
+                                todayWorkout!!.workoutName.contains("Arm", ignoreCase = true) ->
+                                    navController.navigate("armsDay")
+                                else -> navController.navigate("pushday")
+                            }
+                        }
+                    )
+                } else if (selectedDate == LocalDate.now()) {
+                    AddWorkoutCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        onAddClick = {
+                            navController.navigate("weeklyPlanner")
+                        }
+                    )
+                } else {
+                    // Show historical workout card or message
+                    HistoricalWorkoutCard(
+                        date = selectedDate,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                // ================ END NEW ================
 
+                // ================= Personal Training System =================
+                @Composable
+                fun PersonalTrainingCard(
+                    modifier: Modifier = Modifier,
+                    onClick: () -> Unit = {}
+                ) {
+                    Card(
+                        modifier = modifier
+                            .fillMaxWidth()
+                            .height(160.dp)  // Adjust height as needed
+                            .clickable(onClick = onClick),
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
+                    ) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            // Header with gradient
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(100.dp)
+                                    .background(
+                                        brush = androidx.compose.ui.graphics.Brush.linearGradient(
+                                            colors = listOf(deepBlue, mediumBlue)
+                                        )
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column {
+                                        Text(
+                                            text = "PERSONAL TRAINING",
+                                            style = MaterialTheme.typography.titleLarge.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.White
+                                            ),
+                                            fontSize = 18.sp
+                                        )
+                                        Text(
+                                            text = "1-on-1 Coaching with Dev",
+                                            style = MaterialTheme.typography.bodyMedium.copy(
+                                                color = lightBlue
+                                            )
+                                        )
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .size(50.dp)
+                                            .clip(CircleShape)
+                                            .background(Color.White)
+                                            .padding(8.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            Icons.Default.FitnessCenter,
+                                            contentDescription = "Training",
+                                            tint = deepBlue,
+                                            modifier = Modifier.size(28.dp)
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Content
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Custom Plans + Nutrition + Accountability",
+                                        style = MaterialTheme.typography.bodyMedium.copy(
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = deepBlue
+                                        ),
+                                        maxLines = 2
+                                    )
+                                }
+                                Button(
+                                    onClick = onClick,
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = deepBlue,
+                                        contentColor = Color.White
+                                    ),
+                                    modifier = Modifier.height(36.dp)
+                                ) {
+                                    Text("Learn More", fontSize = 12.sp)
+                                }
+                            }
+                        }
+                    }
+                }
                 Spacer(modifier = Modifier.height(20.dp))
 
                 // Today's Progress Section
                 Text(
-                    text = "Today's progress",
+                    text = if (selectedDate == LocalDate.now()) {
+                        "Today's Progress"
+                    } else {
+                        "Progress for ${selectedDate.format(DateTimeFormatter.ofPattern("MMM dd, yyyy"))}"
+                    },
                     style = MaterialTheme.typography.labelLarge.copy(
                         fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 0.5.sp
                     ),
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                    color = deepBlue.copy(alpha = 0.8f),
+                    modifier = Modifier.padding(horizontal = 4.dp)
                 )
                 Spacer(modifier = Modifier.height(8.dp))
 
@@ -127,20 +430,33 @@ fun HomeScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    StepsCard(modifier = Modifier.weight(1f))
-                    CaloriesCard(modifier = Modifier.weight(1f))
+                    StepsCard(
+                        modifier = Modifier.weight(1f),
+                        stepsCount = displaySteps,
+                        distanceKm = String.format("%.2f", displayDistance),
+                        kcal = "$displayCalories",
+                        healthManager = healthManager  // ✅ Pass the singleton
+                    )
+                    CaloriesCard(
+                        modifier = Modifier.weight(1f),
+                        calories = displayCalories,
+                        healthManager = healthManager,  // ✅ Pass the singleton
+                        goalText = if (selectedDate == LocalDate.now()) "Hit 600 calories" else "Daily Goal"
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(20.dp))
 
-                // FITNESS TRACKING CARDS - ADDED THIS SECTION
+                // FITNESS TRACKING CARDS
                 Text(
                     text = "Fitness Tracking",
                     style = MaterialTheme.typography.labelLarge.copy(
                         fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 0.5.sp
                     ),
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                    color = deepBlue.copy(alpha = 0.8f),
+                    modifier = Modifier.padding(horizontal = 4.dp)
                 )
                 Spacer(modifier = Modifier.height(8.dp))
 
@@ -153,9 +469,12 @@ fun HomeScreen(
                         modifier = Modifier
                             .weight(1f)
                             .clickable(onClick = onCalendarClick),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = Color.White
+                        ),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                        border = CardDefaults.outlinedCardBorder()
                     ) {
                         Column(
                             modifier = Modifier
@@ -163,21 +482,37 @@ fun HomeScreen(
                                 .padding(16.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Icon(
-                                Icons.Default.CalendarMonth,
-                                contentDescription = "Calendar",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(32.dp)
-                            )
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        androidx.compose.ui.graphics.Brush.verticalGradient(
+                                            colors = listOf(lightBlue, mediumBlue)
+                                        )
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Icons.Default.CalendarMonth,
+                                    contentDescription = "Calendar",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
                                 text = "Fitness Calendar",
-                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = deepBlue
+                                )
                             )
                             Text(
                                 text = "Track daily progress",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    color = mediumBlue.copy(alpha = 0.7f)
+                                )
                             )
                         }
                     }
@@ -187,9 +522,12 @@ fun HomeScreen(
                         modifier = Modifier
                             .weight(1f)
                             .clickable(onClick = onProgressClick),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = Color.White
+                        ),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                        border = CardDefaults.outlinedCardBorder()
                     ) {
                         Column(
                             modifier = Modifier
@@ -197,36 +535,108 @@ fun HomeScreen(
                                 .padding(16.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Icon(
-                                Icons.Default.TrendingUp,
-                                contentDescription = "Progress",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(32.dp)
-                            )
+                            Box(
+                                modifier = Modifier
+                                    .size(56.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        androidx.compose.ui.graphics.Brush.verticalGradient(
+                                            colors = listOf(offWhite, lightBlue)
+                                        )
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Icons.Default.TrendingUp,
+                                    contentDescription = "Progress",
+                                    tint = mediumBlue,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
                                 text = "Progress Analytics",
-                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = deepBlue
+                                )
                             )
                             Text(
                                 text = "View statistics",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    color = mediumBlue.copy(alpha = 0.7f)
+                                )
                             )
                         }
                     }
+
+                    // ================ NEW: Weekly Planner Card ================
+                    Card(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { navController.navigate("weeklyPlanner") },
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = Color.White
+                        ),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                        border = CardDefaults.outlinedCardBorder()
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        androidx.compose.ui.graphics.Brush.verticalGradient(
+                                            colors = listOf(lightBlue, mediumBlue)
+                                        )
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Icons.Default.CalendarToday,
+                                    contentDescription = "Weekly Plan",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Weekly Planner",
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = deepBlue
+                                )
+                            )
+                            Text(
+                                text = "Plan your workouts",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    color = mediumBlue.copy(alpha = 0.7f)
+                                )
+                            )
+                        }
+                    }
+                    // ================ END NEW ================
                 }
 
                 Spacer(modifier = Modifier.height(20.dp))
 
                 // Trending Workout Section
                 Text(
-                    text = "Trending workout",
+                    text = "Trending Workouts",
                     style = MaterialTheme.typography.labelLarge.copy(
                         fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 0.5.sp
                     ),
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                    color = deepBlue.copy(alpha = 0.8f),
+                    modifier = Modifier.padding(horizontal = 4.dp)
                 )
                 Spacer(modifier = Modifier.height(8.dp))
 
@@ -239,9 +649,11 @@ fun HomeScreen(
                     text = "Your Progress",
                     style = MaterialTheme.typography.labelLarge.copy(
                         fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 0.5.sp
                     ),
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                    color = deepBlue.copy(alpha = 0.8f),
+                    modifier = Modifier.padding(horizontal = 4.dp)
                 )
                 Spacer(modifier = Modifier.height(8.dp))
 
@@ -249,8 +661,8 @@ fun HomeScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable { navController.navigate("workoutHistory") },
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
                     elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                 ) {
                     Row(
@@ -259,20 +671,67 @@ fun HomeScreen(
                             .padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(lightBlue.copy(alpha = 0.1f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.BarChart,
+                                contentDescription = "Analytics",
+                                tint = mediumBlue,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(16.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = "Workout History & Analytics",
-                                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold)
+                                style = MaterialTheme.typography.bodyLarge.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = deepBlue
+                                )
                             )
                             Text(
                                 text = "View your progress and statistics",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    color = mediumBlue.copy(alpha = 0.6f)
+                                )
                             )
                         }
-                        Icon(Icons.Default.TrendingUp, contentDescription = "Analytics", tint = MaterialTheme.colorScheme.primary)
+                        Icon(
+                            Icons.Default.ChevronRight,
+                            contentDescription = "View",
+                            tint = mediumBlue
+                        )
                     }
                 }
+
+                // ================ ADD PERSONAL TRAINING CARD HERE ================
+                Spacer(modifier = Modifier.height(20.dp))
+
+// Personal Training Section
+                Text(
+                    text = "Personal Training",
+                    style = MaterialTheme.typography.labelLarge.copy(
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 0.5.sp
+                    ),
+                    color = deepBlue.copy(alpha = 0.8f),
+                    modifier = Modifier.padding(horizontal = 4.dp)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                PersonalTrainingCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = {
+                        navController.navigate("personalTraining")
+                    }
+                )
+// ================ END PERSONAL TRAINING CARD ================
 
                 // Add extra space at the bottom for the navigation pill
                 Spacer(modifier = Modifier.height(80.dp))
@@ -284,20 +743,211 @@ fun HomeScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.BottomCenter),
-            navController = navController // Add this line
+            navController = navController
         )
     }
 }
 
+// ================ NEW COMPONENTS ADDED BELOW ================
+
+@Composable
+fun PlannedWorkoutCard(
+    workout: com.yourorg.fitxtrackdemo.data.model.WorkoutPlan,
+    modifier: Modifier = Modifier,
+    onStartClick: () -> Unit = {}
+) {
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(100.dp),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color.White
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(
+                        androidx.compose.ui.graphics.Brush.verticalGradient(
+                            colors = listOf(lightBlue, mediumBlue)
+                        )
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.FitnessCenter,
+                    contentDescription = "workout thumb",
+                    tint = Color.White,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = workout.workoutName.uppercase(),
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.sp,
+                        color = deepBlue
+                    ),
+                    maxLines = 1
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = lightBlue.copy(alpha = 0.1f),
+                        modifier = Modifier.wrapContentWidth()
+                    ) {
+                        Text(
+                            text = "✨ Planned",
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = mediumBlue
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    Text(
+                        text = "${workout.duration} min • ${workout.difficulty}",
+                        fontSize = 11.sp,
+                        color = deepBlue.copy(alpha = 0.6f)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            Button(
+                onClick = onStartClick,
+                shape = RoundedCornerShape(20.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = mediumBlue,
+                    contentColor = Color.White
+                ),
+                modifier = Modifier
+                    .width(140.dp)
+                    .height(40.dp)
+            ) {
+                Text(
+                    text = "START WORKOUT",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun AddWorkoutCard(
+    modifier: Modifier = Modifier,
+    onAddClick: () -> Unit = {}
+) {
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(100.dp),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color.White
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(lightBlue.copy(alpha = 0.1f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.Add,
+                    contentDescription = "Add Workout",
+                    tint = mediumBlue,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "PLAN YOUR WORKOUT",
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.sp,
+                        color = deepBlue
+                    )
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Text(
+                    text = "Add a workout plan for today",
+                    fontSize = 12.sp,
+                    color = deepBlue.copy(alpha = 0.6f)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            Button(
+                onClick = onAddClick,
+                shape = RoundedCornerShape(20.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = deepBlue,
+                    contentColor = Color.White
+                ),
+                modifier = Modifier
+                    .width(120.dp)
+                    .height(40.dp)
+            ) {
+                Text(
+                    text = "ADD PLAN",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+    }
+}
+
+// ================ EXISTING CODE BELOW (NO CHANGES) ================
+
 @Composable
 private fun TopRow(
+    navController: NavController,  // ← ADD THIS PARAMETER
     isLoggedIn: Boolean,
     userName: String,
     profileImageUrl: String?,
     streakText: String,
     leagueText: String,
     onProfileClick: () -> Unit,
-    onLoginClick: () -> Unit
+    onLoginClick: () -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -307,54 +957,78 @@ private fun TopRow(
         Row(verticalAlignment = Alignment.CenterVertically) {
             ProfileImage(profileImageUrl = profileImageUrl, onClick = onProfileClick)
             Spacer(modifier = Modifier.width(12.dp))
-            Column {
+
+            Column  {
+
                 if (isLoggedIn && userName.isNotBlank()) {
-                    // User is logged in - show their name
                     Text(
                         text = "Hi, $userName",
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
                         )
+
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = "Welcome Back!",
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 14.sp),
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontSize = 14.sp,
+                            color = lightBlue
+                        )
+
                     )
                 } else {
-                    // User is not logged in - show login prompt
                     Text(
                         text = "Login / Signup",
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
                         )
+
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = "Start your fitness journey",
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 14.sp),
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontSize = 14.sp,
+                            color = lightBlue
+                        )
+
                     )
                 }
             }
         }
 
-        // Only show chips if user is logged in
         if (isLoggedIn) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Chip(text = leagueText)
+            Row(verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.wrapContentWidth()  //
+            ) {
+
+                Chip(text = leagueText, color = lightBlue)
                 Spacer(modifier = Modifier.width(6.dp))
-                Chip(text = streakText)
+                Chip(text = streakText, color = mediumBlue)
             }
         } else {
-            // Show login button instead of chips
             Button(
-                onClick = onLoginClick,
+                onClick = {
+                    Log.d("TopRow", "Login button clicked, isLoggedIn: $isLoggedIn")
+                    try {
+                        onLoginClick()
+                    } catch (e: Exception) {
+                        Log.e("TopRow", "Login button error: ${e.message}", e)
+                    }
+                },
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.height(36.dp)
+                    .wrapContentWidth(), // add this
+
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color.White,
+                    contentColor = deepBlue
+                )
             ) {
                 Text("Login")
             }
@@ -368,6 +1042,7 @@ private fun ProfileImage(profileImageUrl: String?, sizeDp: Int = 48, onClick: ()
         .size(sizeDp.dp)
         .clip(CircleShape)
         .clickable(onClick = onClick)
+        .background(Color.White)
 
     if (!profileImageUrl.isNullOrBlank()) {
         AsyncImage(
@@ -381,24 +1056,24 @@ private fun ProfileImage(profileImageUrl: String?, sizeDp: Int = 48, onClick: ()
         )
     } else {
         Box(
-            modifier = modifier.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)),
+            modifier = modifier,
             contentAlignment = Alignment.Center
         ) {
             Text(
                 text = "D",
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
-                fontSize = 16.sp
+                color = deepBlue,
+                fontSize = 20.sp
             )
         }
     }
 }
 
 @Composable
-private fun Chip(text: String) {
+private fun Chip(text: String, color: Color = lightBlue) {
     Surface(
         shape = RoundedCornerShape(16.dp),
-        tonalElevation = 2.dp,
+        color = color.copy(alpha = 0.2f),
         modifier = Modifier
             .wrapContentWidth()
             .heightIn(min = 32.dp)
@@ -406,7 +1081,10 @@ private fun Chip(text: String) {
         Box(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
             Text(
                 text = text,
-                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                style = MaterialTheme.typography.bodySmall.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.White
+                ),
                 fontSize = 12.sp
             )
         }
@@ -415,24 +1093,34 @@ private fun Chip(text: String) {
 
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
-fun CalendarWeekUI() {
+fun CalendarWeekUI(
+    selectedDate: LocalDate,
+    onDateSelected: (LocalDate) -> Unit
+) {
     val today = LocalDate.now()
-    val weekDates = remember { getWeekDates(today) }
+    val weekDates = remember(selectedDate) { getWeekDates(selectedDate) }
 
-    // State to track the selected date
-    var selectedDate by remember { mutableStateOf(today) }
-
-    LazyRow(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    Card(
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color.White.copy(alpha = 0.15f)
+        ),
+        modifier = Modifier.fillMaxWidth()
     ) {
-        items(weekDates) { date ->
-            DayItem(
-                date = date,
-                isToday = date == today,
-                isSelected = date == selectedDate,
-                onDateClick = { selectedDate = date }
-            )
+        LazyRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(weekDates) { date ->
+                DayItem(
+                    date = date,
+                    isToday = date == today,
+                    isSelected = date == selectedDate,
+                    onDateClick = { onDateSelected(date) }
+                )
+            }
         }
     }
 }
@@ -445,22 +1133,21 @@ fun DayItem(
     isSelected: Boolean,
     onDateClick: () -> Unit
 ) {
-    // Determine background and text colors based on selection state
     val bgColor = when {
-        isSelected -> MaterialTheme.colorScheme.primary
-        isToday -> MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+        isSelected -> Color.White
+        isToday -> lightBlue.copy(alpha = 0.3f)
         else -> Color.Transparent
     }
 
     val textColor = when {
-        isSelected -> Color.White
-        isToday -> MaterialTheme.colorScheme.primary
-        else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+        isSelected -> mediumBlue
+        isToday -> Color.White
+        else -> lightBlue
     }
 
     Column(
         modifier = Modifier
-            .width(48.dp)
+            .width(44.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(bgColor)
             .clickable { onDateClick() }
@@ -469,7 +1156,7 @@ fun DayItem(
     ) {
         Text(
             text = date.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault()),
-            fontSize = 12.sp,
+            fontSize = 11.sp,
             fontWeight = FontWeight.Medium,
             color = textColor
         )
@@ -484,87 +1171,158 @@ fun DayItem(
 }
 
 @RequiresApi(Build.VERSION_CODES.O)
-private fun getWeekDates(today: LocalDate): List<LocalDate> {
-    val startOfWeek = today.minusDays((today.dayOfWeek.value % 7).toLong())
+private fun getWeekDates(centerDate: LocalDate): List<LocalDate> {
+    // Get dates for a week centered around the selected date
+    val startOfWeek = centerDate.minusDays((centerDate.dayOfWeek.value % 7).toLong())
     return (0..6).map { startOfWeek.plusDays(it.toLong()) }
 }
 
+@Composable
+fun HistoricalWorkoutCard(
+    date: LocalDate,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(100.dp),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color.White
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(lightBlue.copy(alpha = 0.1f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.History,
+                    contentDescription = "Historical Data",
+                    tint = mediumBlue,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "HISTORICAL DATA",
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.sp,
+                        color = deepBlue
+                    )
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Text(
+                    text = date.format(DateTimeFormatter.ofPattern("EEEE, MMMM dd")),
+                    fontSize = 12.sp,
+                    color = deepBlue.copy(alpha = 0.6f)
+                )
+            }
+        }
+    }
+}
+
+// Keep your existing PushWorkoutCard for reference or backup
 @Composable
 fun PushWorkoutCard(
     modifier: Modifier = Modifier,
     thumbnailRes: Int = R.drawable.ic_workout_placeholder,
     title: String = "Push Day - chest & triceps",
     planText: String = "✨ Plan",
-    onStartClick: () -> Unit = {} // This callback is passed from HomeScreen
+    onStartClick: () -> Unit = {}
 ) {
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .height(80.dp),
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+            .height(88.dp),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color.White
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(12.dp),
+                .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Thumbnail
             Box(
                 modifier = Modifier
-                    .size(50.dp)
-                    .clip(RoundedCornerShape(10.dp))
+                    .size(56.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(
+                        androidx.compose.ui.graphics.Brush.verticalGradient(
+                            colors = listOf(lightBlue, mediumBlue)
+                        )
+                    ),
+                contentAlignment = Alignment.Center
             ) {
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(thumbnailRes)
-                        .crossfade(true)
-                        .build(),
+                Icon(
+                    Icons.Default.FitnessCenter,
                     contentDescription = "workout thumb",
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
+                    tint = Color.White,
+                    modifier = Modifier.size(28.dp)
                 )
             }
 
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(16.dp))
 
-            // Text Column
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title.uppercase(),
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = FontWeight.SemiBold,
-                        fontSize = 14.sp
+                        fontSize = 14.sp,
+                        color = deepBlue
                     ),
                     maxLines = 1
                 )
 
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
                 Surface(
                     shape = RoundedCornerShape(8.dp),
-                    tonalElevation = 1.dp
+                    color = lightBlue.copy(alpha = 0.1f),
+                    modifier = Modifier.wrapContentWidth()
                 ) {
                     Text(
                         text = planText,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                         fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium
+                        fontWeight = FontWeight.Medium,
+                        color = mediumBlue
                     )
                 }
             }
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            // Start Workout Button - This calls the onStartClick passed from HomeScreen
             Button(
                 onClick = onStartClick,
                 shape = RoundedCornerShape(20.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = mediumBlue,
+                    contentColor = Color.White
+                ),
                 modifier = Modifier
-                    .width(155.dp)
-                    .height(36.dp)
+                    .width(140.dp)
+                    .height(60.dp)
             ) {
                 Text(
                     text = "START WORKOUT",
@@ -578,66 +1336,97 @@ fun PushWorkoutCard(
 }
 
 @Composable
-fun StepsCard(modifier: Modifier = Modifier, stepsCount: Int = 3246, distanceKm: String = "2.51 km", kcal: String = "123.4 kcal", weekBars: List<Int> = listOf(30, 55, 70, 60, 80, 50, 65)) {
+fun StepsCard(
+    modifier: Modifier = Modifier,
+    stepsCount: Int = 3246,
+    distanceKm: String = "2.51 km",
+    kcal: String = "123.4 kcal",
+    healthManager: SimpleHealthManager,  // Add this parameter
+    weekBars: List<Int> = listOf(30, 55, 70, 60, 80, 50, 65)
+) {
     Card(
         modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color.White
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "STEPS",
-                        style = MaterialTheme.typography.labelMedium.copy(
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 12.sp
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.DirectionsWalk,
+                            contentDescription = "Steps",
+                            tint = mediumBlue,
+                            modifier = Modifier.size(16.dp)
                         )
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "STEPS",
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 12.sp,
+                                color = mediumBlue
+                            )
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
                     Text(
+                        // Use passed steps count, not healthManager.currentSteps
                         text = "$stepsCount steps",
                         style = MaterialTheme.typography.titleSmall.copy(
                             fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp
+                            fontSize = 16.sp,
+                            color = deepBlue
                         )
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = "$distanceKm | $kcal",
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp)
+                        // Use passed distance and calories
+                        text = "$distanceKm km | $kcal kcal",
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontSize = 11.sp,
+                            color = lightBlue
+                        )
                     )
                 }
                 Icon(
-                    imageVector = Icons.Default.ArrowForward,
+                    imageVector = Icons.Default.MoreVert,
                     contentDescription = "more",
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(18.dp),
+                    tint = lightBlue
                 )
             }
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(12.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.Bottom
             ) {
                 weekBars.forEachIndexed { index, value ->
-                    val height = (8 + (value / 100f * 40)).dp
+                    val height = (8 + (value / 100f * 36)).dp
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Box(
                             modifier = Modifier
                                 .width(8.dp)
                                 .height(height)
                                 .clip(RoundedCornerShape(4.dp))
-                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.85f))
+                                .background(
+                                    androidx.compose.ui.graphics.Brush.verticalGradient(
+                                        colors = listOf(lightBlue, mediumBlue)
+                                    )
+                                )
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = listOf("M", "T", "W", "T", "F", "S", "S")[index],
-                            fontSize = 9.sp
+                            fontSize = 9.sp,
+                            color = mediumBlue
                         )
                     }
                 }
@@ -647,75 +1436,129 @@ fun StepsCard(modifier: Modifier = Modifier, stepsCount: Int = 3246, distanceKm:
 }
 
 @Composable
-fun CaloriesCard(modifier: Modifier = Modifier, calories: Int = 120, goalText: String = "Hit 600 calories") {
+fun CaloriesCard(
+    modifier: Modifier = Modifier,
+    calories: Int = 120, // Default value, will be overridden
+    healthManager: SimpleHealthManager,  // Add this parameter
+    goalText: String = "Hit 600 calories"
+) {
+    val progress = calories / 600f
+
     Card(
         modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color.White
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(12.dp),
+                .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(
-                text = "🔥 CALORIES",
-                style = MaterialTheme.typography.labelMedium.copy(
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 12.sp
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.LocalFireDepartment,
+                    contentDescription = "Calories",
+                    tint = lightBlue,
+                    modifier = Modifier.size(16.dp)
                 )
-            )
-            Text(
-                text = "$calories kcal",
-                style = MaterialTheme.typography.titleSmall.copy(
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "CALORIES",
+                    style = MaterialTheme.typography.labelMedium.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 12.sp,
+                        color = lightBlue
+                    )
                 )
-            )
+            }
+
+            // Simple version without circular progress
             Box(
                 modifier = Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                    .size(70.dp)
+                    .clip(CircleShape)
+                    .background(mediumBlue.copy(alpha = 0.1f)),
                 contentAlignment = Alignment.Center
             ) {
-                Text("◔◑◕", fontSize = 14.sp)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        // Use passed calories, not healthManager.currentCalories
+                        text = "$calories",
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 22.sp,
+                            color = deepBlue
+                        )
+                    )
+                    Text(
+                        text = "kcal",
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            color = mediumBlue
+                        )
+                    )
+                }
             }
+
             Text(
                 text = goalText,
                 fontSize = 11.sp,
-                fontWeight = FontWeight.Medium
+                fontWeight = FontWeight.Medium,
+                color = mediumBlue
             )
         }
     }
 }
 
 @Composable
-fun TrendingWorkoutsRow(modifier: Modifier = Modifier, items: List<Int> = listOf(R.drawable.ic_thumb1_placeholder, R.drawable.ic_thumb2_placeholder), onItemClick: (index: Int) -> Unit = {}) {
+fun TrendingWorkoutsRow(
+    modifier: Modifier = Modifier,
+    items: List<Int> = listOf(R.drawable.ic_thumb1_placeholder, R.drawable.ic_thumb2_placeholder),
+    onItemClick: (index: Int) -> Unit = {}
+) {
     LazyRow(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         items(items) { res ->
-            Box(
+            Card(
+                shape = RoundedCornerShape(20.dp),
                 modifier = Modifier
-                    .width(140.dp)
-                    .height(100.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .clickable { onItemClick(items.indexOf(res)) }
+                    .width(160.dp)
+                    .height(100.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
             ) {
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(res)
-                        .crossfade(true)
-                        .build(),
-                    contentDescription = "training thumb",
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clickable { onItemClick(items.indexOf(res)) }
+                ) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(res)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = "training thumb",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.Transparent,
+                                        deepBlue.copy(alpha = 0.4f)
+                                    )
+                                )
+                            )
+                    )
+                }
             }
         }
     }
@@ -726,15 +1569,15 @@ fun BottomPillNav(
     modifier: Modifier = Modifier,
     selectedIndex: Int = 0,
     onItemSelected: (index: Int) -> Unit = {},
-    navController: NavController // Add navController parameter
+    navController: NavController
 ) {
     Surface(
         shape = RoundedCornerShape(28.dp),
-        tonalElevation = 12.dp,
+        color = Color.White,
         shadowElevation = 8.dp,
         modifier = modifier
             .padding(horizontal = 20.dp, vertical = 10.dp)
-            .height(76.dp)
+            .height(68.dp)
     ) {
         Row(
             modifier = Modifier
@@ -747,7 +1590,7 @@ fun BottomPillNav(
                 NavItem(Icons.Default.Home, "Home"),
                 NavItem(R.drawable.ic_fitness_centre, "Workout"),
                 NavItem(R.drawable.ic_self_improve, "Meditation"),
-                NavItem(Icons.Default.Settings, "Setting")
+                NavItem(Icons.Default.Settings, "Settings")
             )
 
             navItems.forEachIndexed { index, navItem ->
@@ -756,67 +1599,60 @@ fun BottomPillNav(
                 Column(
                     modifier = Modifier
                         .weight(1f)
-                        .clickable { onItemSelected(index)
+                        .clickable {
+                            onItemSelected(index)
                             when (index) {
                                 0 -> { */
 /* Home - already here *//*
  }
-                                1 -> navController.navigate("workoutMain") // Workout main screen
-                                2 -> navController.navigate("meditation") // Meditation
-                                3 -> navController.navigate("settings") // Settings
+                                1 -> navController.navigate("workoutMain")
+                                2 -> navController.navigate("meditation")
+                                3 -> navController.navigate("settings")
                             }
                         }
                         .padding(vertical = 8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
-                    // Animated icon container
-                    Surface(
-                        shape = CircleShape,
-                        color = if (isSelected) MaterialTheme.colorScheme.primary
-                        else Color.Transparent,
-                        modifier = Modifier.size(36.dp),
-                        tonalElevation = if (isSelected) 6.dp else 0.dp
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (isSelected) mediumBlue else Color.Transparent
+                            )
                     ) {
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier.fillMaxSize()
-                        ) {
-                            when (navItem.icon) {
-                                is ImageVector -> {
-                                    Icon(
-                                        imageVector = navItem.icon,
-                                        contentDescription = navItem.label,
-                                        tint = if (isSelected) Color.White
-                                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                                is Int -> {
-                                    Icon(
-                                        painter = painterResource(id = navItem.icon),
-                                        contentDescription = navItem.label,
-                                        tint = if (isSelected) Color.White
-                                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
+                        when (navItem.icon) {
+                            is ImageVector -> {
+                                Icon(
+                                    imageVector = navItem.icon,
+                                    contentDescription = navItem.label,
+                                    tint = if (isSelected) Color.White else lightBlue,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            is Int -> {
+                                Icon(
+                                    painter = painterResource(id = navItem.icon),
+                                    contentDescription = navItem.label,
+                                    tint = if (isSelected) Color.White else lightBlue,
+                                    modifier = Modifier.size(20.dp)
+                                )
                             }
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
 
-                    // Premium text styling
                     Text(
                         text = navItem.label,
                         style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.SemiBold,
-                            fontSize = 11.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            fontSize = 10.sp,
                             letterSpacing = 0.2.sp
                         ),
-                        color = if (isSelected) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        color = if (isSelected) mediumBlue else lightBlue,
                         maxLines = 1
                     )
                 }
@@ -825,7 +1661,6 @@ fun BottomPillNav(
     }
 }
 
-// Data class for navigation items (add this outside the function)
 data class NavItem(
     val icon: Any,
     val label: String

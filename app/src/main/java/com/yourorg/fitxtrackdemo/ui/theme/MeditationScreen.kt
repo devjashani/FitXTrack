@@ -29,6 +29,8 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import kotlinx.coroutines.delay
 import com.yourorg.fitxtrackdemo.R
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -62,120 +64,283 @@ fun MeditationScreen(navController: NavController) {
         }
     }
 
-    Scaffold(
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Text(
-                        "Meditation",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 20.sp,
-                        color = Color.White
+    val meditationPurple = Color(0xFF667eea)
+    val meditationDarkPurple = Color(0xFF764ba2)
+    val lightPurple = Color(0xFFA78BFA)
+    val whiteWithOpacity = Color.White.copy(alpha = 0.8f)
+
+    Box(modifier = Modifier.fillMaxSize().background(offWhite)) {
+        Column(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            // Custom Top Bar with gradient
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(80.dp)
+                    .background(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(meditationPurple, meditationDarkPurple)
+                        )
                     )
-                },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .align(Alignment.CenterStart),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = { navController.popBackStack() },
+                        modifier = Modifier.size(48.dp)
+                    ) {
                         Icon(
                             Icons.Default.ArrowBack,
                             contentDescription = "Back",
                             tint = Color.White
                         )
                     }
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = Color.Transparent
-                )
-            )
-        }
-    ) { paddingValues ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            Color(0xFF667eea),
-                            Color(0xFF764ba2)
-                        )
-                    )
-                )
-                .padding(paddingValues)
-        ) {
-            // Background decorative elements
-            BackgroundElements()
 
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                // Meditation visualization
-                MeditationVisualization(isPlaying = isPlaying)
+                    Spacer(modifier = Modifier.width(8.dp))
 
-                Spacer(modifier = Modifier.height(40.dp))
-
-                // Timer display
-                Text(
-                    text = formatTime(currentTime),
-                    style = MaterialTheme.typography.displayLarge.copy(
-                        fontWeight = FontWeight.Light,
-                        fontSize = 64.sp,
+                    Text(
+                        "Meditation",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 20.sp,
                         color = Color.White
                     )
-                )
+                }
+            }
 
-                Text(
-                    text = formatTime(selectedDuration),
-                    style = MaterialTheme.typography.bodyLarge.copy(
-                        color = Color.White.copy(alpha = 0.7f)
-                    ),
-                    modifier = Modifier.padding(top = 8.dp)
-                )
+            // Main Content
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .weight(1f) // Important: This makes space for bottom pill
+                    .background(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(meditationPurple, meditationDarkPurple)
+                        )
+                    )
+            ) {
+                // Background decorative elements
+                BackgroundElements()
 
-                Spacer(modifier = Modifier.height(40.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // Meditation visualization
+                    MeditationVisualization(isPlaying = isPlaying)
 
-                // Main control button
-                MainControlButton(
-                    isPlaying = isPlaying,
-                    onPlayPause = {
-                        isPlaying = !isPlaying
-                        if (isPlaying) {
-                            mediaPlayer.isLooping = true
-                            mediaPlayer.start()
-                        } else {
-                            mediaPlayer.pause()
-                        }
-                    },
-                    onReset = {
-                        isPlaying = false
-                        currentTime = 0
-                        mediaPlayer.pause()
-                        mediaPlayer.seekTo(0)
-                    }
-                )
+                    Spacer(modifier = Modifier.height(40.dp))
 
-                Spacer(modifier = Modifier.height(40.dp))
+                    // Timer display
+                    Text(
+                        text = formatTime(currentTime),
+                        style = MaterialTheme.typography.displayLarge.copy(
+                            fontWeight = FontWeight.Light,
+                            fontSize = 64.sp,
+                            color = Color.White
+                        )
+                    )
 
-                // Duration selector
-                DurationSelector(
-                    selectedDuration = selectedDuration,
-                    onDurationSelected = { duration ->
-                        selectedDuration = duration
-                        if (currentTime > duration) {
+                    Text(
+                        text = formatTime(selectedDuration),
+                        style = MaterialTheme.typography.bodyLarge.copy(
+                            color = Color.White.copy(alpha = 0.7f)
+                        ),
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+
+                    Spacer(modifier = Modifier.height(40.dp))
+
+                    // Main control button
+                    MainControlButton(
+                        isPlaying = isPlaying,
+                        onPlayPause = {
+                            isPlaying = !isPlaying
+                            if (isPlaying) {
+                                mediaPlayer.isLooping = true
+                                mediaPlayer.start()
+                            } else {
+                                mediaPlayer.pause()
+                            }
+                        },
+                        onReset = {
+                            isPlaying = false
                             currentTime = 0
+                            mediaPlayer.pause()
+                            mediaPlayer.seekTo(0)
+                        }
+                    )
+
+                    Spacer(modifier = Modifier.height(40.dp))
+
+                    // Duration selector
+                    DurationSelector(
+                        selectedDuration = selectedDuration,
+                        onDurationSelected = { duration ->
+                            selectedDuration = duration
+                            if (currentTime > duration) {
+                                currentTime = 0
+                            }
+                        }
+                    )
+
+                    Spacer(modifier = Modifier.weight(1f))
+
+                    // Meditation sessions with bottom padding
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 80.dp) // Add bottom padding for pill
+                    ) {
+                        MeditationSessions()
+                    }
+                }
+            }
+        }
+
+        // Meditation-themed Bottom Navigation Pill - UPDATED
+        MeditationBottomPill(
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.BottomCenter),
+            selectedIndex = 2, // Meditation is index 2
+            navController = navController,
+            backgroundColor = Color.White.copy(alpha = 0.15f), // Semi-transparent white
+            selectedColor = Color.White, // White for selected item
+            unselectedColor = Color.White.copy(alpha = 0.7f), // Semi-transparent white for unselected
+            pillColor = meditationPurple // Purple background for selected pill
+        )
+    }
+}
+
+// Custom Meditation-themed Bottom Pill - NEW COMPONENT
+@Composable
+fun MeditationBottomPill(
+    modifier: Modifier = Modifier,
+    selectedIndex: Int = 0,
+    navController: NavController,
+    backgroundColor: Color = Color.White.copy(alpha = 0.15f),
+    selectedColor: Color = Color.White,
+    unselectedColor: Color = Color.White.copy(alpha = 0.7f),
+    pillColor: Color = Color(0xFF667eea)
+) {
+    Surface(
+        shape = RoundedCornerShape(28.dp),
+        color = backgroundColor,
+        shadowElevation = 4.dp,
+        modifier = modifier
+            .padding(horizontal = 20.dp, vertical = 10.dp)
+            .height(68.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            val navItems = listOf(
+                MeditationNavItem(Icons.Default.Home, "Home"),
+                MeditationNavItem(R.drawable.ic_fitness_centre, "Workout"),
+                MeditationNavItem(R.drawable.ic_self_improve, "Meditation"),
+                MeditationNavItem(Icons.Default.Settings, "Settings")
+            )
+
+            navItems.forEachIndexed { index, navItem ->
+                val isSelected = index == selectedIndex
+
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable {
+                            when (index) {
+                                0 -> {
+                                    navController.navigate("home") {
+                                        popUpTo("home") { inclusive = true }
+                                        launchSingleTop = true
+                                    }
+                                }
+                                1 -> {
+                                    navController.navigate("workoutMain") {
+                                        popUpTo("home") { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                }
+                                2 -> {
+                                    // Already on meditation screen
+                                }
+                                3 -> {
+                                    navController.navigate("settings") {
+                                        popUpTo("home") { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                }
+                            }
+                        }
+                        .padding(vertical = 8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (isSelected) pillColor else Color.Transparent
+                            )
+                    ) {
+                        when (navItem.icon) {
+                            is ImageVector -> {
+                                Icon(
+                                    imageVector = navItem.icon,
+                                    contentDescription = navItem.label,
+                                    tint = if (isSelected) selectedColor else unselectedColor,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            is Int -> {
+                                Icon(
+                                    painter = painterResource(id = navItem.icon),
+                                    contentDescription = navItem.label,
+                                    tint = if (isSelected) selectedColor else unselectedColor,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
                         }
                     }
-                )
 
-                Spacer(modifier = Modifier.weight(1f))
+                    Spacer(modifier = Modifier.height(4.dp))
 
-                // Meditation sessions
-                MeditationSessions()
+                    Text(
+                        text = navItem.label,
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            fontSize = 10.sp,
+                            letterSpacing = 0.2.sp
+                        ),
+                        color = if (isSelected) selectedColor else unselectedColor,
+                        maxLines = 1
+                    )
+                }
             }
         }
     }
 }
+
+data class MeditationNavItem(
+    val icon: Any,
+    val label: String
+)
 
 @Composable
 fun BackgroundElements() {
@@ -385,10 +550,16 @@ fun MeditationSessions() {
         )
 
         LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(bottom = 16.dp) // Add padding at bottom
         ) {
             items(sessions) { session ->
                 MeditationSessionCard(session = session)
+            }
+
+            // Add extra space at bottom
+            item {
+                Spacer(modifier = Modifier.height(32.dp))
             }
         }
     }

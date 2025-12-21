@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.time.DayOfWeek
+import java.time.LocalDate
 
 class WorkoutPlanViewModel : ViewModel() {
 
@@ -18,8 +19,13 @@ class WorkoutPlanViewModel : ViewModel() {
     private val _todayWorkout = MutableStateFlow<WorkoutPlan?>(null)
     val todayWorkout = _todayWorkout.asStateFlow()
 
+    // ADD THIS: Flow for list format (for HomeScreen)
+    private val _weeklyPlansList = MutableStateFlow<List<WorkoutPlan>>(emptyList())
+    val weeklyPlansList = _weeklyPlansList.asStateFlow()
+
     init {
         updateTodayWorkout()
+        updateWeeklyPlansList()
     }
 
     fun setWorkoutForDay(day: DayOfWeek, workoutName: String) {
@@ -35,7 +41,8 @@ class WorkoutPlanViewModel : ViewModel() {
 
             val plan = WorkoutPlan(
                 id = "${day.name}_${System.currentTimeMillis()}",
-                day = day.name,  // Changed to String
+                day = day.name,  // String format like "MONDAY"
+                dayOfWeek = day.value,  // ADD THIS: Int value 1-7
                 workoutName = workoutName,
                 workoutType = workoutType,
                 exercises = getDefaultExercises(workoutType),
@@ -49,6 +56,7 @@ class WorkoutPlanViewModel : ViewModel() {
             }
 
             updateTodayWorkout()
+            updateWeeklyPlansList() // ADD THIS
         }
     }
 
@@ -58,6 +66,7 @@ class WorkoutPlanViewModel : ViewModel() {
                 this[day] = null
             }
             updateTodayWorkout()
+            updateWeeklyPlansList() // ADD THIS
         }
     }
 
@@ -70,8 +79,18 @@ class WorkoutPlanViewModel : ViewModel() {
     }
 
     private fun updateTodayWorkout() {
-        val today = java.time.DayOfWeek.from(java.time.LocalDate.now())
+        val today = DayOfWeek.from(LocalDate.now())
         _todayWorkout.value = _weeklyPlans.value[today]
+    }
+
+    // ADD THIS FUNCTION: Convert map to list for HomeScreen
+    private fun updateWeeklyPlansList() {
+        _weeklyPlansList.value = _weeklyPlans.value.values.filterNotNull()
+    }
+
+    // ADD THIS FUNCTION: Get workout for specific day (int format)
+    fun getWorkoutForDayInt(dayInt: Int): WorkoutPlan? {
+        return _weeklyPlansList.value.find { it.dayOfWeek == dayInt }
     }
 
     private fun getDefaultExercises(type: String): List<String> {
@@ -85,7 +104,6 @@ class WorkoutPlanViewModel : ViewModel() {
         }
     }
 
-    // Add this function to your WorkoutPlanViewModel class
     fun getWorkoutNavigationRoute(workoutName: String): String {
         return when {
             workoutName.contains("Push", ignoreCase = true) -> "pushday"
@@ -93,16 +111,16 @@ class WorkoutPlanViewModel : ViewModel() {
             workoutName.contains("Leg", ignoreCase = true) -> "legDay"
             workoutName.contains("Full Body", ignoreCase = true) -> "fullBody"
             workoutName.contains("Arm", ignoreCase = true) -> "armsDay"
-            workoutName.contains(
-                "Shoulder",
-                ignoreCase = true
-            ) -> "workoutMain" // or create shoulders screen
-            workoutName.contains(
-                "Cardio",
-                ignoreCase = true
-            ) -> "workoutMain" // or create cardio screen
+            workoutName.contains("Shoulder", ignoreCase = true) -> "workoutMain"
+            workoutName.contains("Cardio", ignoreCase = true) -> "workoutMain"
             workoutName.contains("Abs", ignoreCase = true) -> "absCore"
-            else -> "pushday" // Default
+            else -> "pushday"
         }
+    }
+
+    // ADD THIS: Helper function for HomeScreen
+    fun getWorkoutForSelectedDate(selectedDate: LocalDate): WorkoutPlan? {
+        val dayInt = selectedDate.dayOfWeek.value
+        return getWorkoutForDayInt(dayInt)
     }
 }

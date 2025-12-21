@@ -4,12 +4,13 @@ import java.time.DayOfWeek
 
 data class WorkoutPlan(
     val id: String = "",
-    val day: String,
-    val workoutName: String,
-    val workoutType: String, // "push", "pull", "legs", "custom"
+    val day: String = "", // String like "MONDAY"
+    val dayOfWeek: Int = 0, // ADD THIS: Int 1-7 (Monday=1, Sunday=7)
+    val workoutName: String = "",
+    val workoutType: String = "",
     val exercises: List<String> = emptyList(),
-    val duration: Int = 60, // minutes
-    val difficulty: String = "Intermediate",
+    val duration: Int = 0,
+    val difficulty: String = "",
     val isCustom: Boolean = false
 )
 

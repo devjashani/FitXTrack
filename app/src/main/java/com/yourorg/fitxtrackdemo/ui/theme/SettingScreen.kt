@@ -1,5 +1,6 @@
 package com.yourorg.fitxtrackdemo.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -15,6 +16,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.yourorg.fitxtrackdemo.ui.theme.* // Add this import for theme colors and BottomPillNav
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -26,181 +28,203 @@ fun SettingScreen(navController: NavController) {
     var soundEffectsEnabled by remember { mutableStateOf(true) }
     var hapticFeedbackEnabled by remember { mutableStateOf(true) }
 
-    Scaffold(
-        topBar = {
+    Box(modifier = Modifier.fillMaxSize().background(offWhite)) {
+        Column(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            // Top App Bar
             CenterAlignedTopAppBar(
                 title = {
                     Text(
                         "Settings",
                         fontWeight = FontWeight.Bold,
-                        fontSize = 20.sp
+                        fontSize = 20.sp,
+                        color = deepBlue
                     )
                 },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = deepBlue)
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.White
+                )
+            )
+
+            // Main Content
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .weight(1f) // Important: Makes space for bottom pill
+                    .padding(16.dp),
+                contentPadding = PaddingValues(bottom = 80.dp) // Add extra padding at bottom
+            ) {
+                // Profile Section
+                item {
+                    SettingSection(title = "Profile") {
+                        SettingItem(
+                            icon = Icons.Default.Person,
+                            title = "Edit Profile",
+                            subtitle = "Update your personal information",
+                            onClick = { navController.navigate("editProfile") }
+                        )
+                        SettingItem(
+                            icon = Icons.Default.FitnessCenter,
+                            title = "Fitness Goals",
+                            subtitle = "Set your workout targets",
+                            onClick = { /* Navigate to fitness goals */ }
+                        )
+                        SettingItem(
+                            icon = Icons.Default.MonitorWeight,
+                            title = "Body Metrics",
+                            subtitle = "Track your progress",
+                            onClick = { /* Navigate to body metrics */ }
+                        )
                     }
                 }
-            )
+
+                // Preferences Section
+                item {
+                    SettingSection(title = "Preferences") {
+                        SettingToggleItem(
+                            icon = Icons.Default.Notifications,
+                            title = "Push Notifications",
+                            subtitle = "Receive workout reminders",
+                            isChecked = notificationsEnabled,
+                            onCheckedChange = { notificationsEnabled = it }
+                        )
+                        SettingToggleItem(
+                            icon = Icons.Default.DarkMode,
+                            title = "Dark Mode",
+                            subtitle = "Switch between themes",
+                            isChecked = darkModeEnabled,
+                            onCheckedChange = { darkModeEnabled = it }
+                        )
+                        SettingToggleItem(
+                            icon = Icons.Default.Assessment,
+                            title = "Weekly Reports",
+                            subtitle = "Get weekly progress updates",
+                            isChecked = weeklyReportsEnabled,
+                            onCheckedChange = { weeklyReportsEnabled = it }
+                        )
+                        SettingToggleItem(
+                            icon = Icons.Default.VolumeUp,
+                            title = "Sound Effects",
+                            subtitle = "Enable workout sounds",
+                            isChecked = soundEffectsEnabled,
+                            onCheckedChange = { soundEffectsEnabled = it }
+                        )
+                        SettingToggleItem(
+                            icon = Icons.Default.Vibration,
+                            title = "Haptic Feedback",
+                            subtitle = "Vibration during workouts",
+                            isChecked = hapticFeedbackEnabled,
+                            onCheckedChange = { hapticFeedbackEnabled = it }
+                        )
+                    }
+                }
+
+                // Workout Settings Section
+                item {
+                    SettingSection(title = "Workout Settings") {
+                        SettingItem(
+                            icon = Icons.Default.Timer,
+                            title = "Rest Timer",
+                            subtitle = "Set rest intervals between sets",
+                            onClick = { navController.navigate("editProfile") }
+                        )
+                        SettingItem(
+                            icon = Icons.Default.Speed,
+                            title = "Units",
+                            subtitle = "kg/lb, km/miles",
+                            onClick = { /* Navigate to units settings */ }
+                        )
+                        SettingItem(
+                            icon = Icons.Default.Warning,
+                            title = "Safety Features",
+                            subtitle = "Spotter alerts and form correction",
+                            onClick = { /* Navigate to safety settings */ }
+                        )
+                    }
+                }
+
+                // Support Section
+                item {
+                    SettingSection(title = "Support") {
+                        SettingItem(
+                            icon = Icons.Default.Help,
+                            title = "Help & Support",
+                            subtitle = "Get help with the app",
+                            onClick = { /* Navigate to help */ }
+                        )
+                        SettingItem(
+                            icon = Icons.Default.Description,
+                            title = "Terms & Privacy",
+                            subtitle = "Legal information",
+                            onClick = { /* Navigate to terms */ }
+                        )
+                        SettingItem(
+                            icon = Icons.Default.Star,
+                            title = "Rate App",
+                            subtitle = "Share your experience",
+                            onClick = { /* Open play store */ }
+                        )
+                        SettingItem(
+                            icon = Icons.Default.Share,
+                            title = "Share App",
+                            subtitle = "Tell your friends",
+                            onClick = { /* Share app */ }
+                        )
+                    }
+                }
+
+                // Account Section
+                item {
+                    SettingSection(title = "Account") {
+                        SettingItem(
+                            icon = Icons.Default.ExitToApp,
+                            title = "Sign Out",
+                            subtitle = "Log out from your account",
+                            onClick = {
+                                // Handle sign out
+                                navController.navigate("auth") {
+                                    popUpTo("home") { inclusive = true }
+                                }
+                            },
+                            titleColor = MaterialTheme.colorScheme.error
+                        )
+                    }
+
+                    // Add extra space before version info
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    // App Version
+                    Box(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "FitX Track v1.0.0",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        )
+                    }
+
+                    // Add extra space at the bottom for the pill
+                    Spacer(modifier = Modifier.height(60.dp))
+                }
+            }
         }
-    ) { paddingValues ->
-        LazyColumn(
+
+        // Bottom Navigation Pill - ADDED
+        BottomPillNav(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(16.dp)
-        ) {
-            // Profile Section
-            item {
-                SettingSection(title = "Profile") {
-                    SettingItem(
-                        icon = Icons.Default.Person,
-                        title = "Edit Profile",
-                        subtitle = "Update your personal information",
-                        onClick = { navController.navigate("editProfile") }
-                    )
-                    SettingItem(
-                        icon = Icons.Default.FitnessCenter,
-                        title = "Fitness Goals",
-                        subtitle = "Set your workout targets",
-                        onClick = { /* Navigate to fitness goals */ }
-                    )
-                    SettingItem(
-                        icon = Icons.Default.MonitorWeight,
-                        title = "Body Metrics",
-                        subtitle = "Track your progress",
-                        onClick = { /* Navigate to body metrics */ }
-                    )
-                }
-            }
-
-            // Preferences Section
-            item {
-                SettingSection(title = "Preferences") {
-                    SettingToggleItem(
-                        icon = Icons.Default.Notifications,
-                        title = "Push Notifications",
-                        subtitle = "Receive workout reminders",
-                        isChecked = notificationsEnabled,
-                        onCheckedChange = { notificationsEnabled = it }
-                    )
-                    SettingToggleItem(
-                        icon = Icons.Default.DarkMode,
-                        title = "Dark Mode",
-                        subtitle = "Switch between themes",
-                        isChecked = darkModeEnabled,
-                        onCheckedChange = { darkModeEnabled = it }
-                    )
-                    SettingToggleItem(
-                        icon = Icons.Default.Assessment,
-                        title = "Weekly Reports",
-                        subtitle = "Get weekly progress updates",
-                        isChecked = weeklyReportsEnabled,
-                        onCheckedChange = { weeklyReportsEnabled = it }
-                    )
-                    SettingToggleItem(
-                        icon = Icons.Default.VolumeUp,
-                        title = "Sound Effects",
-                        subtitle = "Enable workout sounds",
-                        isChecked = soundEffectsEnabled,
-                        onCheckedChange = { soundEffectsEnabled = it }
-                    )
-                    SettingToggleItem(
-                        icon = Icons.Default.Vibration,
-                        title = "Haptic Feedback",
-                        subtitle = "Vibration during workouts",
-                        isChecked = hapticFeedbackEnabled,
-                        onCheckedChange = { hapticFeedbackEnabled = it }
-                    )
-                }
-            }
-
-            // Workout Settings Section
-            item {
-                SettingSection(title = "Workout Settings") {
-                    SettingItem(
-                        icon = Icons.Default.Timer,
-                        title = "Rest Timer",
-                        subtitle = "Set rest intervals between sets",
-                        onClick = {  navController.navigate("editProfile") }
-                    )
-                    SettingItem(
-                        icon = Icons.Default.Speed,
-                        title = "Units",
-                        subtitle = "kg/lb, km/miles",
-                        onClick = { /* Navigate to units settings */ }
-                    )
-                    SettingItem(
-                        icon = Icons.Default.Warning,
-                        title = "Safety Features",
-                        subtitle = "Spotter alerts and form correction",
-                        onClick = { /* Navigate to safety settings */ }
-                    )
-                }
-            }
-
-            // Support Section
-            item {
-                SettingSection(title = "Support") {
-                    SettingItem(
-                        icon = Icons.Default.Help,
-                        title = "Help & Support",
-                        subtitle = "Get help with the app",
-                        onClick = { /* Navigate to help */ }
-                    )
-                    SettingItem(
-                        icon = Icons.Default.Description,
-                        title = "Terms & Privacy",
-                        subtitle = "Legal information",
-                        onClick = { /* Navigate to terms */ }
-                    )
-                    SettingItem(
-                        icon = Icons.Default.Star,
-                        title = "Rate App",
-                        subtitle = "Share your experience",
-                        onClick = { /* Open play store */ }
-                    )
-                    SettingItem(
-                        icon = Icons.Default.Share,
-                        title = "Share App",
-                        subtitle = "Tell your friends",
-                        onClick = { /* Share app */ }
-                    )
-                }
-            }
-
-            // Account Section
-            item {
-                SettingSection(title = "Account") {
-                    SettingItem(
-                        icon = Icons.Default.ExitToApp,
-                        title = "Sign Out",
-                        subtitle = "Log out from your account",
-                        onClick = {
-                            // Handle sign out
-                            navController.navigate("auth") {
-                                popUpTo("home") { inclusive = true }
-                            }
-                        },
-                        titleColor = MaterialTheme.colorScheme.error
-                    )
-                }
-                Spacer(modifier = Modifier.height(20.dp))
-
-                // App Version
-                Box(
-                    modifier = Modifier.fillMaxWidth(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "FitX Track v1.0.0",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                    )
-                }
-                Spacer(modifier = Modifier.height(16.dp))
-            }
-        }
+                .fillMaxWidth()
+                .align(Alignment.BottomCenter),
+            selectedIndex = 3, // Settings is index 3
+            navController = navController
+        )
     }
 }
 

@@ -312,6 +312,9 @@ fun EmptyWorkoutHistory() {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
             )
+
         }
+
     }
+
 }

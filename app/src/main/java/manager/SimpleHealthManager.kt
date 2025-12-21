@@ -11,6 +11,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import java.time.Instant
 import java.time.ZoneId
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 
 class SimpleHealthManager(context: Context) : SensorEventListener {
 
@@ -37,14 +39,14 @@ class SimpleHealthManager(context: Context) : SensorEventListener {
     init {
         setupStepCounter()
         loadSavedSteps()
+        // Save today's initial data
+        saveTodayToHistory()
     }
 
-    // Add this function to SimpleHealthManager.kt
     fun isStepSensorAvailable(): Boolean {
         return stepSensor != null
     }
 
-    
     private fun setupStepCounter() {
         stepSensor = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
         stepSensor?.let {
@@ -72,6 +74,9 @@ class SimpleHealthManager(context: Context) : SensorEventListener {
 
                 // Save to SharedPreferences
                 saveTodayData(todaySteps, currentCalories, currentDistance)
+
+                // ALSO save to historical data
+                saveTodayToHistory()
             }
         }
     }
@@ -129,12 +134,18 @@ class SimpleHealthManager(context: Context) : SensorEventListener {
     // ============== CALENDAR CONNECTION FUNCTIONS ==============
     // These must be INSIDE the class to access appContext
 
+    private fun saveTodayToHistory() {
+        val today = LocalDate.now().toString()
+        saveStepsForDate(today, currentSteps, currentCalories, currentDistance)
+    }
+
     fun saveStepsForDate(date: String, steps: Int, calories: Int, distance: Double) {
         val sharedPref = appContext.getSharedPreferences("health_history", Context.MODE_PRIVATE)
         with(sharedPref.edit()) {
             putInt("steps_$date", steps)
             putInt("calories_$date", calories)
             putFloat("distance_$date", distance.toFloat())
+            putLong("timestamp_$date", System.currentTimeMillis())
             apply()
         }
     }
@@ -148,9 +159,13 @@ class SimpleHealthManager(context: Context) : SensorEventListener {
         )
     }
 
+    fun getStepsForDate(date: LocalDate): Triple<Int, Int, Double> {
+        return getStepsForDate(date.toString())
+    }
+
     fun getWeeklyData(): Map<String, Triple<Int, Int, Double>> {
         val weeklyData = mutableMapOf<String, Triple<Int, Int, Double>>()
-        val today = java.time.LocalDate.now()
+        val today = LocalDate.now()
 
         // Get last 7 days
         for (i in 0..6) {
@@ -160,6 +175,33 @@ class SimpleHealthManager(context: Context) : SensorEventListener {
         }
 
         return weeklyData
+    }
+
+    fun getHistoricalData(startDate: LocalDate, endDate: LocalDate): Map<String, Triple<Int, Int, Double>> {
+        val historicalData = mutableMapOf<String, Triple<Int, Int, Double>>()
+        var currentDate = startDate
+
+        while (!currentDate.isAfter(endDate)) {
+            val dateStr = currentDate.toString()
+            historicalData[dateStr] = getStepsForDate(dateStr)
+            currentDate = currentDate.plusDays(1)
+        }
+
+        return historicalData
+    }
+
+    fun getLastNDays(days: Int): List<Triple<String, Int, Int>> {
+        val result = mutableListOf<Triple<String, Int, Int>>()
+        val today = LocalDate.now()
+
+        for (i in 0 until days) {
+            val date = today.minusDays(i.toLong())
+            val dateStr = date.toString()
+            val (steps, calories, _) = getStepsForDate(dateStr)
+            result.add(Triple(dateStr, steps, calories))
+        }
+
+        return result
     }
     // ============== END CALENDAR FUNCTIONS ==============
 

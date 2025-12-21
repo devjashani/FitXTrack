@@ -13,9 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -29,6 +27,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.yourorg.fitxtrackdemo.R
 import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.*
 import androidx.compose.material3.Card
@@ -39,9 +38,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.collectAsState
 import androidx.navigation.NavController
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.text.style.TextOverflow
 import com.yourorg.fitxtrackdemo.manager.UserManager
 import com.yourorg.fitxtrackdemo.ui.theme.*
@@ -52,6 +48,10 @@ import com.yourorg.fitxtrackdemo.manager.SimpleHealthManager
 import com.yourorg.fitxtrackdemo.ui.viewmodels.WorkoutPlanViewModel
 import kotlinx.coroutines.delay
 import java.time.DayOfWeek
+import androidx.compose.animation.core.*
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.zIndex
 
 // Using theme colors from Theme.kt
 val deepNavy = FitnessDarkBlue      // #0A1931
@@ -84,6 +84,35 @@ fun HomeScreen(
     val calories by remember { mutableStateOf(healthManager.currentCalories) }
     val distance by remember { mutableStateOf(healthManager.currentDistance) }
 
+    // STATE FOR SELECTED DATE
+    var selectedDate by remember { mutableStateOf(LocalDate.now()) }
+
+    // STATE FOR DISPLAYING SELECTED DATE DATA - FIXED VERSION
+    var selectedDateData by remember(selectedDate) {
+        mutableStateOf<Triple<Int, Int, Double>?>(null)
+    }
+
+    // Initialize selected date data
+    LaunchedEffect(selectedDate) {
+        selectedDateData = if (selectedDate == LocalDate.now()) {
+            Triple(steps, calories, distance)
+        } else {
+            healthManager.getStepsForDate(selectedDate)
+        }
+    }
+
+    // Update selected data when steps change (for today)
+    LaunchedEffect(steps, calories, distance) {
+        if (selectedDate == LocalDate.now()) {
+            selectedDateData = Triple(steps, calories, distance)
+        }
+    }
+
+    // Get display values safely
+    val displaySteps = selectedDateData?.first ?: steps
+    val displayCalories = selectedDateData?.second ?: calories
+    val displayDistance = selectedDateData?.third ?: distance
+
     // Auto-update UI every 2 seconds
     LaunchedEffect(Unit) {
         while (true) {
@@ -94,7 +123,27 @@ fun HomeScreen(
                 healthManager.currentSteps
                 healthManager.currentCalories
                 healthManager.currentDistance
+
+                // Always save today's data when it updates
+                if (selectedDate == LocalDate.now()) {
+                    healthManager.saveStepsForDate(
+                        LocalDate.now().toString(),
+                        healthManager.currentSteps,
+                        healthManager.currentCalories,
+                        healthManager.currentDistance
+                    )
+                }
             }
+        }
+    }
+
+    // Update selected date data when date changes
+    LaunchedEffect(selectedDate) {
+        if (selectedDate == LocalDate.now()) {
+            selectedDateData = Triple(steps, calories, distance)
+        } else {
+            // Get historical data for the selected date
+            selectedDateData = healthManager.getStepsForDate(selectedDate)
         }
     }
     // Debug: Check sensor availability
@@ -103,12 +152,32 @@ fun HomeScreen(
         Log.d("STEP_TRACKING", "Current steps: ${healthManager.currentSteps}")
         Log.d("STEP_TRACKING", "Current calories: ${healthManager.currentCalories}")
         Log.d("STEP_TRACKING", "Current distance: ${healthManager.currentDistance}")
+
+        // Also save initial today's data
+        healthManager.saveStepsForDate(
+            LocalDate.now().toString(),
+            healthManager.currentSteps,
+            healthManager.currentCalories,
+            healthManager.currentDistance
+        )
     }
     // ============ END DEBUG CODE ============
 
     val auth = FirebaseAuth.getInstance()
     // Use LaunchedEffect to listen for auth state changes
     var currentUser by remember { mutableStateOf(auth.currentUser) }
+
+    // ADD THIS: Extract profile image URL
+    val profileImageUrl = remember(currentUser) {
+        currentUser?.photoUrl?.toString()?.let { url ->
+            // Google photos need size parameter for better quality
+            if (url.contains("googleusercontent.com")) {
+                "$url?sz=400" // Add size parameter for higher resolution
+            } else {
+                url
+            }
+        }
+    }
 
     LaunchedEffect(Unit) {
         val listener = FirebaseAuth.AuthStateListener { firebaseAuth ->
@@ -125,7 +194,7 @@ fun HomeScreen(
     "User"
     val workoutPlanViewModel: WorkoutPlanViewModel = viewModel()
     val todayWorkout by workoutPlanViewModel.todayWorkout.collectAsState()
-    val weeklyPlans by workoutPlanViewModel.weeklyPlans.collectAsState()
+    val weeklyPlans by workoutPlanViewModel.weeklyPlansList.collectAsState() // ← CHANGED
 
     Box(modifier = modifier.fillMaxSize().background(offWhite)) {
         Column(
@@ -160,27 +229,32 @@ fun HomeScreen(
                         onProfileClick = onProfileClick,
                         onLoginClick = {
                             try {
-                            navController.navigate("auth") {
-                                // Clear back stack if needed
-                                popUpTo("home") {
-                                    saveState = true
+                                navController.navigate("auth") {
+                                    // Clear back stack if needed
+                                    popUpTo("home") {
+                                        saveState = true
+                                    }
+                                    // Prevent multiple instances
+                                    launchSingleTop = true
+                                    // Restore state when going back
+                                    restoreState = true
                                 }
-                                // Prevent multiple instances
-                                launchSingleTop = true
-                                // Restore state when going back
-                                restoreState = true
+                                Log.d("HomeScreen", "Navigating to auth screen")
+                            } catch (e: Exception) {
+                                Log.e("HomeScreen", "Navigation failed: ${e.message}", e)
                             }
-                            Log.d("HomeScreen", "Navigating to auth screen")
-                        } catch (e: Exception) {
-                            Log.e("HomeScreen", "Navigation failed: ${e.message}", e)
-                        }
-                                       },
-
-
+                        },
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
-                    CalendarWeekUI()
+                    // UPDATED CALENDAR - Now connected to selectedDate
+                    CalendarWeekUI(
+                        selectedDate = selectedDate,
+                        onDateSelected = { date ->
+                            selectedDate = date
+                            Log.d("HomeScreen", "Calendar date clicked: $date")
+                        }
+                    )
                 }
             }
 
@@ -194,7 +268,7 @@ fun HomeScreen(
 
                 // TODAY'S WORKOUT Section
                 Text(
-                    text = "TODAY'S WORKOUT",
+                    text = if (selectedDate == LocalDate.now()) "TODAY'S WORKOUT" else "WORKOUT FOR ${selectedDate.format(DateTimeFormatter.ofPattern("MMM dd"))}",
                     style = MaterialTheme.typography.labelLarge.copy(
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -205,34 +279,63 @@ fun HomeScreen(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // ================ NEW: Show Today's Planned Workout or Add Workout Card ================
-                if (todayWorkout != null) {
+// ================ FIXED LOGIC - Show Today's Planned Workout ================
+// Get today's workout from weekly plans
+                val todayWorkoutPlan = remember(weeklyPlans, selectedDate) {
+                    if (selectedDate == LocalDate.now()) {
+                        // Find workout for today
+                        weeklyPlans.find { plan ->
+                            plan.dayOfWeek == LocalDate.now().dayOfWeek.value
+                        }
+                    } else {
+                        // Find workout for selected historical date
+                        weeklyPlans.find { plan ->
+                            plan.dayOfWeek == selectedDate.dayOfWeek.value
+                        }
+                    }
+                }
+
+
+// Show appropriate card
+                if (todayWorkoutPlan != null) {
                     PlannedWorkoutCard(
-                        workout = todayWorkout!!,
+                        workout = todayWorkoutPlan,
                         modifier = Modifier.fillMaxWidth(),
                         onStartClick = {
-                            // Navigate based on workout type
+                            // Navigate based on workout type using helper function
                             when {
-                                todayWorkout!!.workoutName.contains("Push", ignoreCase = true) ->
+                                todayWorkoutPlan.workoutName.contains("Push", ignoreCase = true) ->
                                     navController.navigate("pushday")
-                                todayWorkout!!.workoutName.contains("Pull", ignoreCase = true) ->
+                                todayWorkoutPlan.workoutName.contains("Pull", ignoreCase = true) ->
                                     navController.navigate("pullDay")
-                                todayWorkout!!.workoutName.contains("Leg", ignoreCase = true) ->
+                                todayWorkoutPlan.workoutName.contains("Leg", ignoreCase = true) ->
                                     navController.navigate("legDay")
-                                todayWorkout!!.workoutName.contains("Full Body", ignoreCase = true) ->
+                                todayWorkoutPlan.workoutName.contains("Full Body", ignoreCase = true) ->
                                     navController.navigate("fullBody")
-                                todayWorkout!!.workoutName.contains("Arm", ignoreCase = true) ->
+                                todayWorkoutPlan.workoutName.contains("Arm", ignoreCase = true) ->
                                     navController.navigate("armsDay")
-                                else -> navController.navigate("pushday")
+                                todayWorkoutPlan.workoutName.contains("Cardio", ignoreCase = true) ->
+                                    navController.navigate("cardioWorkout")
+                                todayWorkoutPlan.workoutName.contains("Yoga", ignoreCase = true) ->
+                                    navController.navigate("yogaWorkout")
+                                todayWorkoutPlan.workoutName.contains("HIIT", ignoreCase = true) ->
+                                    navController.navigate("hiitWorkout")
+                                else -> navController.navigate("customWorkout")
                             }
                         }
                     )
-                } else {
+                } else if (selectedDate == LocalDate.now()) {
                     AddWorkoutCard(
                         modifier = Modifier.fillMaxWidth(),
                         onAddClick = {
                             navController.navigate("weeklyPlanner")
                         }
+                    )
+                } else {
+                    // Show historical workout card or message
+                    HistoricalWorkoutCard(
+                        date = selectedDate,
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
                 // ================ END NEW ================
@@ -342,7 +445,11 @@ fun HomeScreen(
 
                 // Today's Progress Section
                 Text(
-                    text = "Today's Progress",
+                    text = if (selectedDate == LocalDate.now()) {
+                        "Today's Progress"
+                    } else {
+                        "Progress for ${selectedDate.format(DateTimeFormatter.ofPattern("MMM dd, yyyy"))}"
+                    },
                     style = MaterialTheme.typography.labelLarge.copy(
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -358,13 +465,22 @@ fun HomeScreen(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     StepsCard(
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(180.dp), // ← Add fixed height
+                        stepsCount = displaySteps,
+                        distanceKm = String.format("%.2f", displayDistance),
+                        kcal = "$displayCalories",
                         healthManager = healthManager  // ✅ Pass the singleton
                     )
                     CaloriesCard(
-                                modifier = Modifier.weight(1f),
-                        healthManager = healthManager  // ✅ Pass the singleton
-                 )
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(180.dp), // ← Same fixed height
+                        calories = displayCalories,
+                        healthManager = healthManager,  // ✅ Pass the singleton
+                        goalText = if (selectedDate == LocalDate.now()) "Hit 600 calories" else "Daily Goal"
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(20.dp))
@@ -459,7 +575,7 @@ fun HomeScreen(
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(56.dp)
+                                    .size(48.dp)
                                     .clip(CircleShape)
                                     .background(
                                         androidx.compose.ui.graphics.Brush.verticalGradient(
@@ -634,7 +750,7 @@ fun HomeScreen(
                 // ================ ADD PERSONAL TRAINING CARD HERE ================
                 Spacer(modifier = Modifier.height(20.dp))
 
-// Personal Training Section
+                // Personal Training Section
                 Text(
                     text = "Personal Training",
                     style = MaterialTheme.typography.labelLarge.copy(
@@ -665,11 +781,11 @@ fun HomeScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.BottomCenter),
+            selectedIndex = 0, // Home is index 0
             navController = navController
         )
     }
 }
-
 // ================ NEW COMPONENTS ADDED BELOW ================
 
 @Composable
@@ -927,7 +1043,7 @@ private fun TopRow(
         if (isLoggedIn) {
             Row(verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.wrapContentWidth()  //
-                        ) {
+            ) {
 
                 Chip(text = leagueText, color = lightBlue)
                 Spacer(modifier = Modifier.width(6.dp))
@@ -959,14 +1075,18 @@ private fun TopRow(
 }
 
 @Composable
-private fun ProfileImage(profileImageUrl: String?, sizeDp: Int = 48, onClick: () -> Unit) {
+private fun ProfileImage(
+    profileImageUrl: String?,
+    sizeDp: Int = 48,
+    onClick: () -> Unit
+) {
     val modifier = Modifier
         .size(sizeDp.dp)
         .clip(CircleShape)
         .clickable(onClick = onClick)
-        .background(Color.White)
 
     if (!profileImageUrl.isNullOrBlank()) {
+        // User is logged in with Google profile image
         AsyncImage(
             model = ImageRequest.Builder(LocalContext.current)
                 .data(profileImageUrl)
@@ -977,15 +1097,21 @@ private fun ProfileImage(profileImageUrl: String?, sizeDp: Int = 48, onClick: ()
             contentScale = ContentScale.Crop
         )
     } else {
+        // Not logged in - show Anonymous Avatar with Gradient
         Box(
-            modifier = modifier,
+            modifier = modifier
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(lightBlue, mediumBlue)
+                    )
+                ),
             contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = "D",
-                fontWeight = FontWeight.Bold,
-                color = deepBlue,
-                fontSize = 20.sp
+            Icon(
+                Icons.Default.Person,  // Changed from AccountCircle to Person
+                contentDescription = "Login",
+                tint = Color.White,
+                modifier = Modifier.size(24.dp)
             )
         }
     }
@@ -1015,10 +1141,12 @@ private fun Chip(text: String, color: Color = lightBlue) {
 
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
-fun CalendarWeekUI() {
+fun CalendarWeekUI(
+    selectedDate: LocalDate,
+    onDateSelected: (LocalDate) -> Unit
+) {
     val today = LocalDate.now()
-    val weekDates = remember { getWeekDates(today) }
-    var selectedDate by remember { mutableStateOf(today) }
+    val weekDates = remember(selectedDate) { getWeekDates(selectedDate) }
 
     Card(
         shape = RoundedCornerShape(20.dp),
@@ -1038,7 +1166,7 @@ fun CalendarWeekUI() {
                     date = date,
                     isToday = date == today,
                     isSelected = date == selectedDate,
-                    onDateClick = { selectedDate = date }
+                    onDateClick = { onDateSelected(date) }
                 )
             }
         }
@@ -1091,9 +1219,70 @@ fun DayItem(
 }
 
 @RequiresApi(Build.VERSION_CODES.O)
-private fun getWeekDates(today: LocalDate): List<LocalDate> {
-    val startOfWeek = today.minusDays((today.dayOfWeek.value % 7).toLong())
+private fun getWeekDates(centerDate: LocalDate): List<LocalDate> {
+    // Get dates for a week centered around the selected date
+    val startOfWeek = centerDate.minusDays((centerDate.dayOfWeek.value % 7).toLong())
     return (0..6).map { startOfWeek.plusDays(it.toLong()) }
+}
+
+@Composable
+fun HistoricalWorkoutCard(
+    date: LocalDate,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(100.dp),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color.White
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(lightBlue.copy(alpha = 0.1f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.History,
+                    contentDescription = "Historical Data",
+                    tint = mediumBlue,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "HISTORICAL DATA",
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.sp,
+                        color = deepBlue
+                    )
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Text(
+                    text = date.format(DateTimeFormatter.ofPattern("EEEE, MMMM dd")),
+                    fontSize = 12.sp,
+                    color = deepBlue.copy(alpha = 0.6f)
+                )
+            }
+        }
+    }
 }
 
 // Keep your existing PushWorkoutCard for reference or backup
@@ -1203,10 +1392,6 @@ fun StepsCard(
     healthManager: SimpleHealthManager,  // Add this parameter
     weekBars: List<Int> = listOf(30, 55, 70, 60, 80, 50, 65)
 ) {
-    // Get context for HealthManager
-    val context = LocalContext.current
-    val healthManager = remember { SimpleHealthManager(context) }
-
     Card(
         modifier = modifier,
         shape = RoundedCornerShape(20.dp),
@@ -1240,8 +1425,8 @@ fun StepsCard(
                     }
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        // Use live steps count
-                        text = "${healthManager.currentSteps} steps",
+                        // Use passed steps count, not healthManager.currentSteps
+                        text = "$stepsCount steps",
                         style = MaterialTheme.typography.titleSmall.copy(
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp,
@@ -1250,8 +1435,8 @@ fun StepsCard(
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        // Use live distance and calories
-                        text = "${String.format("%.2f", healthManager.currentDistance)} km | ${healthManager.currentCalories} kcal",
+                        // Use passed distance and calories
+                        text = "$distanceKm km | $kcal kcal",
                         style = MaterialTheme.typography.bodySmall.copy(
                             fontSize = 11.sp,
                             color = lightBlue
@@ -1305,10 +1490,7 @@ fun CaloriesCard(
     healthManager: SimpleHealthManager,  // Add this parameter
     goalText: String = "Hit 600 calories"
 ) {
-    // Get context for HealthManager
-    val context = LocalContext.current
-    val healthManager = remember { SimpleHealthManager(context) }
-    val progress = healthManager.currentCalories / 600f
+    val progress = calories / 600f
 
     Card(
         modifier = modifier,
@@ -1353,8 +1535,8 @@ fun CaloriesCard(
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        // Use live calories count
-                        text = "${healthManager.currentCalories}",
+                        // Use passed calories, not healthManager.currentCalories
+                        text = "$calories",
                         style = MaterialTheme.typography.titleLarge.copy(
                             fontWeight = FontWeight.Bold,
                             fontSize = 22.sp,
@@ -1467,11 +1649,35 @@ fun BottomPillNav(
                         .weight(1f)
                         .clickable {
                             onItemSelected(index)
+                            // Also handle navigation directly
                             when (index) {
-                                0 -> { /* Home - already here */ }
-                                1 -> navController.navigate("workoutMain")
-                                2 -> navController.navigate("meditation")
-                                3 -> navController.navigate("settings")
+                                0 -> {
+                                    navController.navigate("home") {
+                                        popUpTo("home") { inclusive = true }
+                                        launchSingleTop = true
+                                    }
+                                }
+                                1 -> {
+                                    navController.navigate("workoutMain") {
+                                        popUpTo("home") { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                }
+                                2 -> {
+                                    navController.navigate("meditation") {
+                                        popUpTo("home") { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                }
+                                3 -> {
+                                    navController.navigate("settings") {
+                                        popUpTo("home") { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                }
                             }
                         }
                         .padding(vertical = 8.dp),
