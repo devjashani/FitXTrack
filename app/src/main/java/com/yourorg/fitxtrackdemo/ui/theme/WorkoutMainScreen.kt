@@ -30,38 +30,31 @@ import androidx.compose.material3.rememberDismissState
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import com.yourorg.fitxtrackdemo.ui.theme.* // Add this import for theme colors
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun WorkoutMainScreen(
     navController: NavController,
-    workoutViewModel: WorkoutViewModel  // ADD THIS PARAMETER
+    workoutViewModel: WorkoutViewModel
 ) {
     val customPlans by workoutViewModel.customPlans.collectAsState()
+    val coroutineScope = rememberCoroutineScope() // This creates the coroutine scope
 
-    // Debug logging to track custom plans updates
-    LaunchedEffect(customPlans) {
-        println("DEBUG: Custom plans updated: ${customPlans.size}")
-        customPlans.forEachIndexed { index, plan ->
-            println("DEBUG: Plan $index: ${plan.name} with ${plan.exercises.size} exercises")
-        }
-    }
-
-    var selectedTab by remember { mutableStateOf(0) }
+    // Use pagerState as the single source of truth
     val pagerState = rememberPagerState(pageCount = { 3 })
+    val selectedTab = pagerState.currentPage // Derive selectedTab from pagerState
 
     Box(modifier = Modifier.fillMaxSize().background(offWhite)) {
-        Column(
-            modifier = Modifier.fillMaxSize()
-        ) {
-            // Top App Bar
+        Column(modifier = Modifier.fillMaxSize()) {
+            // Top App Bar (unchanged)
             CenterAlignedTopAppBar(
                 title = {
                     Text(
                         "Workout Plans",
                         fontWeight = FontWeight.Bold,
                         fontSize = 20.sp,
-                        color = deepBlue // Added color
+                        color = deepBlue
                     )
                 },
                 navigationIcon = {
@@ -71,7 +64,6 @@ fun WorkoutMainScreen(
                 },
                 actions = {
                     IconButton(onClick = {
-                        // Navigate to create custom workout
                         navController.navigate("createCustomPlan")
                     }) {
                         Icon(Icons.Default.Add, contentDescription = "Create Workout", tint = deepBlue)
@@ -86,14 +78,14 @@ fun WorkoutMainScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .weight(1f) // Changed to weight to make space for bottom pill
+                    .weight(1f)
             ) {
                 // Workout Progress Summary
                 WorkoutSummaryCard()
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Tab Row for different workout sections
+                // Tab Row - Updated to sync with pagerState
                 TabRow(
                     selectedTabIndex = selectedTab,
                     containerColor = MaterialTheme.colorScheme.background,
@@ -103,7 +95,12 @@ fun WorkoutMainScreen(
                     listOf("My Plans", "Browse", "History").forEachIndexed { index, title ->
                         Tab(
                             selected = selectedTab == index,
-                            onClick = { selectedTab = index },
+                            onClick = {
+                                // Animate pager to the selected tab
+                                coroutineScope.launch {
+                                    pagerState.animateScrollToPage(index)
+                                }
+                            },
                             text = {
                                 Text(
                                     text = title,
@@ -130,17 +127,16 @@ fun WorkoutMainScreen(
             }
         }
 
-        // Bottom Navigation Pill - ADDED THIS SECTION
+        // Bottom Navigation Pill
         BottomPillNav(
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.BottomCenter),
-            selectedIndex = 1, // Workout is index 1
+            selectedIndex = 1,
             navController = navController
         )
     }
 }
-
 // REST OF YOUR EXISTING CODE REMAINS EXACTLY THE SAME BELOW...
 
 @Composable
