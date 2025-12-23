@@ -138,6 +138,8 @@ dependencies {
     implementation ("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     implementation ("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
 
+    // ADD THIS ↓↓↓ (only if not already present - newer version for phone auth)
+    implementation("com.google.android.gms:play-services-auth-api-phone:18.0.2")
 
 
 }

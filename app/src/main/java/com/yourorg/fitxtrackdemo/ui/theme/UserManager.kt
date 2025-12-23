@@ -37,6 +37,7 @@ data class UserData(
     val id: String = "",
     val name: String = "",
     val email: String = "",
+    val phone: String = "",  // ← ADD THIS LINE
     val age: String = "",
     val gender: String = "",
     val height: String = "",
