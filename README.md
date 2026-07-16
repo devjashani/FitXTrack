@@ -1,3 +1,6 @@
+Demo Video Link - https://drive.google.com/drive/folders/12qV_rUKd8e7k-DolhYyzI_Fj-KOff94U?usp=drive_link
+
+
 # FitXTrack 🏋️‍♂️📈
 
 FitXTrack is an Android fitness and wellness application built using **Kotlin**, **Jetpack Compose**, and **Firebase**. The app helps users manage workouts, track fitness progress, monitor health metrics, create workout plans, schedule training sessions, and maintain a healthier lifestyle through an intuitive and modern user interface.
